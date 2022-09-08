@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<project basedir="." default="build" name="taco">
+	
+	<!-- PROPERTIES DEFINITION -->
+	<property environment="env" />
+	<property name="workspace_loc" value="../" />
+	<property name="junit.output.dir" value="junit" />
+	<property name="debuglevel" value="source,lines,vars" />
+
+	<property name="build.compiler" value="javac1.7" />
+
+	<property name="target" value="1.7" />
+	<property name="source" value="1.7" />
+	
+	<!-- TACO properties definition -->
+	<property name="app.id" value="jdynalloy" />
+	<property name="app.version" value="1.2.0" />
+	<property name="app.createdBy" value="The RFM Group at the Universidad de Buenos Aires, Argentina." />
+
+	<!-- Build path -->
+	<path id="build.classpath">
+		<pathelement location="bin" />
+		<pathelement location="lib/dynalloy4.jar" />
+		<pathelement location="lib/log4j-1.2.15.jar" />
+		<pathelement location="lib/antlr.jar" />
+		<pathelement location="lib/antlr-3.2.jar" />
+		<pathelement location="lib/alloy4.jar" />
+	</path>
+
+	<!-- TASK DEFINITION -->
+	<!-- init -->	
+	<target name="init" description="copy requires files to /bin">
+		<mkdir dir="bin" />
+		<copy includeemptydirs="false" todir="bin">
+			<fileset dir="src" excludes="**/*.launch, **/*.g, **/*.java" />
+		</copy>
+	</target>
+
+	<!-- Create jar file -->
+	<target name="jar" depends="build">
+		<mkdir dir="${basedir}/dist"/>
+		<delete file="${basedir}/dist/${app.id}.jar"/>
+		<delete dir="${basedir}/META-INF" />
+		<buildnumber file="build.num"/>
+		<tstamp>
+		     <format property="TODAY" pattern="yyyy-MM-dd HH:mm:ss" />
+		</tstamp>
+		<jar jarfile="${basedir}/dist/${app.id}.jar" basedir="bin" includes="**/*.class **/*.djals **/*.als **/log4j.xml">
+			<include id="${basedir}/dist/${app.id}_src.jar"/>
+			<zipgroupfileset dir="${basedir}/lib" includes="*.jar" />
+			<!--<zipfileset dir="${basedir}/src" prefix="sources" />--> 
+			<manifest>
+				<attribute name="Created-By" value="${app.createdBy}"/>
+				<attribute name="Built-Date" value="${TODAY}"/>
+				<!--attribute name="Main-Class" value="ar.edu.taco.TacoMain"/-->
+				<attribute name="Class-Path" value=" "/>
+				<attribute name="Implementation-Version" value="${app.version}-b${build.number}"/>
+			</manifest>
+		</jar>
+		<echo> Packing src files </echo>
+		<zip destfile="${basedir}/dist/${app.id}_src.jar">
+			<fileset dir="${basedir}" includes="src/**/*.java src/**/*.djals src/**/*.als src/**/.xml src/**/.g"/>			
+		</zip>
+		<!-- These tasks remove secury definition files from external libs to avoid a security exception -->
+		<zip destfile="temp-jar-file.jar">
+			<fileset dir="${basedir}/dist" includes="${app.id}_src.jar"/>			
+			<zipfileset src="${basedir}/dist/${app.id}.jar" excludes="META-INF/*.RSA, META-INF/*.DSA, META-INF/*.SF" />
+		</zip>
+		<move file="temp-jar-file.jar" tofile="${basedir}/dist/${app.id}.jar"/>
+	</target>
+
+	<!-- Build the project -->
+	<target name="build" depends="generateParser,compile" />
+
+	<!-- Compile the project -->
+	<target name="compile" depends="init">
+		<echo message="${ant.project.name}: ${ant.file}" />
+		<javac debug="true" debuglevel="${debuglevel}" destdir="bin" source="${source}" target="${target}">
+			<src path="src" />
+			<exclude name="ar/edu/jdynalloy/jfsl/" />
+			<classpath refid="build.classpath" />
+		</javac>
+	</target>
+
+	
+	<!-- clear project and parser -->
+	<target name="clean" depends="cleanParser">
+		<delete dir="bin" />
+	</target>
+
+	<!-- ANTLR -->
+	<!-- Generate parser -->
+	<target name="generateParser">
+		<antlr target="src/ar/edu/jdynalloy/parser/jdynalloy.g" 
+			outputdirectory="src/ar/edu/jdynalloy/parser/" 
+			trace="off" 
+			diagnostic="off" 
+			tracelexer="off" 
+			traceparser="off" 
+			debug="off" >
+			<jvmarg value="-Djava.compiler=NONE" />
+			<classpath refid="build.classpath"/>
+		</antlr>
+	</target>
+
+	<!-- Clean parser -->
+	<target name="cleanParser">
+		<delete file="src\ar\edu\jdynalloy\parser\JDynAlloyLexer.java" />
+		<delete file="src\ar\edu\jdynalloy\parser\JDynAlloyParser.java" />
+		<delete file="src\ar\edu\jdynalloy\parser\JDynAlloyParserTokenTypes.java" />
+		<delete file="src\ar\edu\jdynalloy\parser\expandedjdynalloy.g" />
+		<delete file="src\ar\edu\jdynalloy\parser\JDynAlloyLexer.smap" />
+		<delete file="src\ar\edu\jdynalloy\parser\JDynAlloyParser.smap" />
+		<delete file="src\ar\edu\jdynalloy\parser\JDynAlloyParserTokenTypes.txt" />
+	</target>
+</project>

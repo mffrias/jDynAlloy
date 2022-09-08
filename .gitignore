@@ -1,0 +1,10 @@
+.DS_Store
+output
+generated
+*.class
+*.log
+*.log.*
+*_temp*
+*~
+bin
+dist
