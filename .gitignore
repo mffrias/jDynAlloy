@@ -8,3 +8,5 @@ generated
 *~
 bin
 dist
+.classpath
+.project
