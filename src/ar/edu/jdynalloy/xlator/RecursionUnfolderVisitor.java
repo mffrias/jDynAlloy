@@ -50,10 +50,10 @@ class RecursionUnfolderVisitor extends JDynAlloyMutator {
 	@Override
 	public Object visit(JProgramDeclaration n) {
 		String programId = n.getProgramId();
-		String typedProgramId = programId + "(" + filterParameters(n.getParameters()) + ")";
+//		String typedProgramId = programId + "(" + filterParameters(n.getParameters()) + ")";
 		assert (!programId.contains("("));
 
-		if (callGraph.containsNode(typedProgramId) && callGraph.childrenOf(typedProgramId).contains(programId)) {
+		if (callGraph.containsNode(programId) && callGraph.childrenOf(programId).contains(programId)) {
 			for (int i=0; i<=unroll; i++) {
 				// create n-program declarations
 
