@@ -1031,8 +1031,10 @@ final class JDynAlloyXlatorVisitor extends JDynAlloyVisitor {
 
 		}
 
-		// We need to make an special treatment when throw expression is equal to AssertionFailure 
-		postconditions.add(new NotFormula(new EqualsFormula(JExpressionFactory.PRIMED_THROW_EXPRESSION, JExpressionFactory.ASSERTION_FAILURE_EXPRESSION)));
+//		mffrias 110223
+		
+		// We need to make an special treatment when throw expression is equal to AssertionError 
+//		postconditions.add(new NotFormula(new EqualsFormula(JExpressionFactory.PRIMED_THROW_EXPRESSION, JExpressionFactory.ASSERTION_FAILURE_EXPRESSION)));
 
 		List<AlloyFormula> postconditionFormulas = buildPostconditionFormulas(signatureToCheckId, programId);
 		postconditions.addAll(postconditionFormulas);

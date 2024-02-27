@@ -173,7 +173,7 @@ public abstract class JExpressionFactory {
 	public static final ExprConstant TRUE_EXPRESSION = buildExprConstant(JSignatureFactory.TRUE
 			.getSignatureId());
 
-	public static final ExprConstant ASSERTION_FAILURE_EXPRESSION = buildExprConstant("AssertionFailureLit");
+	public static final ExprConstant ASSERTION_FAILURE_EXPRESSION = buildExprConstant("java_lang_AssertionErrorLit");
 
 	public static final ExprVariable THROW_EXPRESSION = buildExprVariable(THROW_VARIABLE);
 

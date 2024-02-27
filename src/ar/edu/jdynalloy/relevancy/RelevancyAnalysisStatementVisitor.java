@@ -58,7 +58,10 @@ public class RelevancyAnalysisStatementVisitor extends JDynAlloyVisitor {
 
 	@Override
 	public Object visit(JAssert node) {
-		RelevancyAnalysisUtils.analyzeFormula(scene, node.getCondition(), symbolTable, dynJAlloyBinding, modules);		
+		RelevancyAnalysisUtils.analyzeFormula(scene, node.getCondition(), symbolTable, dynJAlloyBinding, modules);
+		for (JDynAlloyModule m : this.modules)
+			if (m.getModuleId().equals("java_lang_AssertionError"))
+				scene.addModule(m);
 		return super.visit(node);
 	}
 

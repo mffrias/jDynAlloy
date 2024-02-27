@@ -58,7 +58,7 @@ public abstract class JPreludeFactory {
 		bff.append("\n");
 
 
-		bff.append("one sig AssertionFailureLit extends java_lang_Throwable {} \n");
+//		bff.append("one sig AssertionErrorLit extends java_lang_AssertionError {} \n");
 
 		if (integer_complement) {
 			StringBuffer complement_func = new StringBuffer();

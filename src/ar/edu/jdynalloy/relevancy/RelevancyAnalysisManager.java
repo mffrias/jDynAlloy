@@ -182,11 +182,7 @@ public class RelevancyAnalysisManager {
 	private void relevancyAnalysisIterationProgram(Scene scene,
 			JProgramDeclaration program, boolean isJavaArith) {
 
-		this.symbolTable.beginScope();
-
-
-//		XXXXXXXXXXXXXXXXXXXXXXX Somehow we are inherinting pred coming from contracts from other methods. This is not correct.
-		
+		this.symbolTable.beginScope();		
 		
 		for (JVariableDeclaration varDeclaration : program.getParameters()) {
 			this.symbolTable.insertLocal(varDeclaration.getVariable()

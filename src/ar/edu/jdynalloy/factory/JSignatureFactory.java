@@ -151,18 +151,18 @@ public abstract class JSignatureFactory {
 						.<String> emptyList(), Collections.<String> emptyList());
 	}
 
-	public static JSignature buildAssertionFailureSignature() {
-		return new JSignature(
-				true,
-				false,
-				"AssertionFailure",
-				new JDynAlloyTyping(),
-				false,
-				(JDynAlloyConfig.getInstance().getUseQualifiedNamesForJTypes() ? "java_lang_Throwable"
-						: "Throwable"), null, Collections.<String> emptySet(),
-				Collections.<AlloyFormula> emptySet() /* facts */, Collections
-						.<String> emptyList(), Collections.<String> emptyList());
-	}
+//	public static JSignature buildAssertionFailureSignature() {
+//		return new JSignature(
+//				true,
+//				false,
+//				"AssertionFailure",
+//				new JDynAlloyTyping(),
+//				false,
+//				(JDynAlloyConfig.getInstance().getUseQualifiedNamesForJTypes() ? "java_lang_Throwable"
+//						: "Throwable"), null, Collections.<String> emptySet(),
+//				Collections.<AlloyFormula> emptySet() /* facts */, Collections
+//						.<String> emptyList(), Collections.<String> emptyList());
+//	}
 
 	public static JSignature buildClassFieldsSignature() {
 		return new JSignature(true, false, "ClassFields",

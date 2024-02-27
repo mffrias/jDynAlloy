@@ -167,10 +167,13 @@ public class ModifiesSolverManager {
 					param = "char";
 				if (param.equals("JavaPrimitiveFloatValue"))
 					param = "float";
-				else
-					if (param.contains("+null")) {
-						param = param.substring(0,param.indexOf('+'));
+				if (param.contains("+null")) {
+					param = param.substring(0,param.indexOf('+'));
+				} else {
+					if (param.contains("null+")) {
+						param = param.substring(5,param.length());
 					}
+				}
 				params += param + ",";
 				hasParams = true;
 			}
