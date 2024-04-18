@@ -361,6 +361,22 @@ public class RelevancyAnalysisManager {
 				throw new JDynAlloyException("Module JavaPrimitiveCharValue not found.");
 			}
 		}
+		
+		if (module.getModuleId().equals("java_lang_LongArray")){
+			JDynAlloyModule theLongMod = null;
+			for (JDynAlloyModule mod : this.modules){
+				if (mod.getModuleId().equals("JavaPrimitiveLongValue")){
+					theLongMod = mod;
+					break;
+				}
+			}
+			if (theLongMod != null){
+				scene.addModule(theLongMod);
+			} else {
+				throw new JDynAlloyException("Module JavaPrimitiveLongValue not found.");
+			}
+		}
+
 
 		if (module.getModuleId().equals("JavaPrimitiveLongValue")){
 			JDynAlloyModule theCharMod = null;
