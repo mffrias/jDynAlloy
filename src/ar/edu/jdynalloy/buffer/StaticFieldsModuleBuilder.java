@@ -25,6 +25,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.Semaphore;
 
 import ar.edu.jdynalloy.ast.JDynAlloyModule;
 import ar.edu.jdynalloy.ast.JClassConstraint;
@@ -46,7 +47,7 @@ public class StaticFieldsModuleBuilder implements IBuiltInModule {
 	private List<JField> fields;
 	private Set<JClassInvariant> staticInvariants;
 	private Set<JClassConstraint> staticConstraints;
-
+	private Semaphore mySemaphore = new Semaphore(1);
 
 	private StaticFieldsModuleBuilder() {
 		fields = new LinkedList<JField>();
@@ -55,8 +56,15 @@ public class StaticFieldsModuleBuilder implements IBuiltInModule {
 	}
 
 	public void addStaticField(JField field) {
-		if (!this.fields.contains(field))
-		  this.fields.add(field);
+		try {
+			mySemaphore.acquire();
+			if (!this.fields.contains(field))
+				this.fields.add(field);
+		} catch (InterruptedException e){
+			System.out.println("Concurrent access problem.");
+		} finally {
+			mySemaphore.release();
+		}
 	}
 	
 	public void addStaticInvariant(JClassInvariant invariant) {
