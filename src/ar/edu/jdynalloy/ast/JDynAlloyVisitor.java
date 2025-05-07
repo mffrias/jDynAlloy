@@ -195,8 +195,16 @@ public class JDynAlloyVisitor implements IJDynAlloyVisitor {
 		 * fields 
 		 */
 		Vector<Object> field_results = new Vector<Object>();
-		for (JField child : node.getFields()) {
-			field_results.add(child.accept(this));
+//		System.out.println("Module: " + node.getModuleId() + " FieldsSize = " + node.getFields().size());
+		try {
+			if (node.getFields().size() == 4){
+				System.out.println("Here!");
+			}
+			for (JField child : node.getFields()) {
+				field_results.add(child.accept(this));
+			}
+		} catch (Exception e){
+			System.out.println("Module: " + node.getModuleId() + " FieldsSize = " + node.getFields().size());
 		}
 		result.fields_result = field_results;
 
