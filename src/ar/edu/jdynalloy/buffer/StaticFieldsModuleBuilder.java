@@ -61,7 +61,7 @@ public class StaticFieldsModuleBuilder implements IBuiltInModule {
 			if (!this.fields.contains(field))
 				this.fields.add(field);
 		} catch (InterruptedException e){
-			System.out.println("Concurrent access problem.");
+			System.out.println("Concurrent access problem..");
 		} finally {
 			mySemaphore.release();
 		}
