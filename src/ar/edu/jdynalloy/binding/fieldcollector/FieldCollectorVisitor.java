@@ -61,7 +61,7 @@ public class FieldCollectorVisitor extends JDynAlloyVisitor {
 	@Override
 	public Object visit(JDynAlloyModule node) {
 		if (node.getModuleId().contains("ClassFields")){
-			System.out.println("FieldCollectorVosotor");
+			System.out.println("FieldCollectorVisitor");
 		}
 		this.moduleName = node.getModuleId();
 		return super.visit(node);
