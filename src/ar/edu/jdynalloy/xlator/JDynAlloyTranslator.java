@@ -184,7 +184,7 @@ public final class JDynAlloyTranslator {
 			if (m.getVarsEncodingValueOfArithmeticOperationsInObjectInvariants() != null)
 					sav.addAll(m.getVarsEncodingValueOfArithmeticOperationsInObjectInvariants().getVarsInTyping());
 			
-			for (JProgramDeclaration jpd : m.getPrograms()){
+ 			for (JProgramDeclaration jpd : m.getPrograms()){
 				if (jpd.getVarsResultOfArithmeticOperationsInRequiresAndEnsures() != null)
 					sav.addAll(jpd.getVarsResultOfArithmeticOperationsInRequiresAndEnsures().getVarsInTyping());
 			}			

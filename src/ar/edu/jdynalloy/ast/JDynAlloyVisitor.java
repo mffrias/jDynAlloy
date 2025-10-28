@@ -372,6 +372,26 @@ public class JDynAlloyVisitor implements IJDynAlloyVisitor {
 	}
 
 
+
+
+
+//	String specFromMethod = this.specFromMethod;
+//	String fullyQualifiedMethodName = this.getFullyQualifiedMethodName();
+//			if (this.specFromMethod.equals(fullyQualifiedMethodName)){
+//		requiresResults = processInputToFix((HashMap<String, Object>)inputToFix, this.isJavaArithmetic);
+//		AlloyFormula theHardcodedInput = (AlloyFormula)requiresResults.get(0);
+//		JPrecondition preconditionWithHardcodedInput = new JPrecondition(theHardcodedInput);
+//		node.getRequires().clear();
+//		node.getRequires().add(preconditionWithHardcodedInput);
+//
+//		inputToFix = null;
+//
+
+
+
+
+
+
 	public String getFullyQualifiedMethodName() {
 		// TODO Auto-generated method stub
 		return null;
@@ -381,15 +401,17 @@ public class JDynAlloyVisitor implements IJDynAlloyVisitor {
 		HashMap<Object, AlloyExpression> mapConcreteToExpre = new HashMap<Object, AlloyExpression>();
 
 		String[] metSplit = this.specFromMethod.split("_");
-		String methodName = metSplit[metSplit.length - 2];
-		Method[] methods = inputToFix2.get("thiz").getClass().getDeclaredMethods();
-		int numPars = 0;
-		Method theMethod = null;
-		for (Method m : methods){
-			if (m.getName().equals(methodName)){
-				numPars = m.getParameterTypes().length;
-				theMethod = m;
-				break;
+		String methodName = metSplit[metSplit.length - 1];
+		if (inputToFix2.get("thiz") != null) {
+			Method[] methods = inputToFix2.get("thiz").getClass().getDeclaredMethods();
+			int numPars = 0;
+			Method theMethod = null;
+			for (Method m : methods) {
+				if (m.getName().equals(methodName)) {
+					numPars = m.getParameterTypes().length;
+					theMethod = m;
+					break;
+				}
 			}
 		}
 
