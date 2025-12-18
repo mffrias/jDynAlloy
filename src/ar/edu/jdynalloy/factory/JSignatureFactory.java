@@ -44,7 +44,9 @@ public abstract class JSignatureFactory {
 	public static final JType JAVA_PRIMITIVE_LONG_VALUE = JType.parse("JavaPrimitiveLongValue");
 
 	public static final JType INT_ARRAY_TYPE = JType.parse("java_lang_IntArray+null");
-	
+
+	public static final JType TWODIM_INT_ARRAY_TYPE = JType.parse("java_lang_IntArray2d+null");
+
 	public static final JType CHAR_ARRAY_TYPE = JType.parse("java_lang_CharArray+null");
 
 	public static final JType LONG_ARRAY_TYPE = JType.parse("java_lang_LongArray+null");

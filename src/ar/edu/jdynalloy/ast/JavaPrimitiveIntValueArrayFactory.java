@@ -57,6 +57,8 @@ public class JavaPrimitiveIntValueArrayFactory {
 			return buildExprFunction("arrayAccess", array, DynalloyFactory.LONG_ARRAY_CONTENTS_FIELD_EXPRESSION, index);
 		} else if (array_type.equals(JSignatureFactory.OBJECT_ARRAY_TYPE)) {
 			return buildExprFunction("arrayAccess", array, DynalloyFactory.OBJECT_ARRAY_CONTENTS_FIELD_EXPRESSION, index);
+		} else if (array_type.equals(JSignatureFactory.TWODIM_INT_ARRAY_TYPE)) {
+			return buildExprFunction("arrayAccess", array, DynalloyFactory.INT_ARRAY_CONTENTS_FIELD_EXPRESSION, index);
 		} else
 			throw new RuntimeException("Unsupported read array type :"
 					+ array_type);

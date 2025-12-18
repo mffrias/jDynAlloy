@@ -153,7 +153,7 @@ public class RelevancyAnalysisUtils {
 		String params = "";
 		boolean hasParams = false;
 		for (JVariableDeclaration v : parameters){
-			if (!v.getVariable().getVariableId().getString().equals("thiz") && !v.getVariable().getVariableId().getString().equals("throw") && !v.getVariable().getVariableId().getString().equals("return")){
+			if (!v.getVariable().getVariableId().getString().equals("thiz") && !v.getVariable().getVariableId().getString().equals("throw") && !v.getVariable().getVariableId().getString().equals("return") && !v.getVariable().getVariableId().getString().startsWith("returnVarFromSpecMethodCall")){
 				String param = v.getType().toString();
 				if (param.equals("Int"))
 					param = "int";
