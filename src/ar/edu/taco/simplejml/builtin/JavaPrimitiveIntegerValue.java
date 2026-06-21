@@ -139,7 +139,7 @@ public class JavaPrimitiveIntegerValue implements IBuiltInModule {
 			if (i > 0)
 				line_str += "else ";
 
-			line_str += String.format("(#(s)=%s) => pred_java_primitive_integer_value_literal_%s[ret] ", i, i);
+			line_str += String.format("(#(s)=%s) => some ret and pred_java_primitive_integer_value_literal_%s[ret] ", i, i);
 			line_str += "\n";
 
 			buff.append(line_str);

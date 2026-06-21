@@ -30,7 +30,6 @@ public final class JType {
 	private boolean isSet = false;
 	private final SpecialType specialType;
 	private boolean imageIsSequence = false;
-
 	private enum Multiplier {
 		SET_MULTIPLIER, LONE_MULTIPLIER, ONE_MULTIPLIER;
 
@@ -51,6 +50,14 @@ public final class JType {
 	private Multiplier right_arrow_multiplier = null;
 
 	private JType ternary_type = null;
+
+//	public List<String> getImg(){
+//		if (isBinaryRelation()){
+//			return img;
+//		} else {
+//			return null;
+//		}
+//	}
 
 	public enum SpecialType {
 		ALLOCATED_OBJECT, SYSTEM_ARRAY, SET_CONTAINS, MAP_ENTRIES, ALLOY_LIST_CONTAINS, JML_OBJECTSET_CONTAINS, JML_OBJECTSEQUENCE_CONTAINS, 
@@ -829,6 +836,9 @@ public final class JType {
 			return "";
 		}
 	}
+
+
+
 
 	/******** MOVED TO JTypeFactory ****************/
 

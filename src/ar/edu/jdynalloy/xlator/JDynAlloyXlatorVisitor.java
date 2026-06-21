@@ -193,6 +193,9 @@ final class JDynAlloyXlatorVisitor extends JDynAlloyVisitor {
 	private final Stack<String> escapedDynalloy = new Stack<String>();
 
 	private final Stack<JDynAlloyModule> currentModule = new Stack<JDynAlloyModule>();
+	public JDynAlloyModule getCurrentModule(){
+		return this.currentModule.peek();
+	}
 
 	private Vector<AlloyFormula> invariants;
 	private Vector<AlloyFormula> constraints;
@@ -514,7 +517,7 @@ final class JDynAlloyXlatorVisitor extends JDynAlloyVisitor {
 
 	private Set<AlloyVariable> programParameters = new HashSet<AlloyVariable>();
 
-	private static class ProgramTranslationResult {
+	static class ProgramTranslationResult {
 		public ProgramTranslationResult(ProgramDeclaration program, AssertionDeclaration assertion, 
 				ProgramDeclaration simProgram, List<AlloyFormula> preds) {
 			super();
@@ -525,6 +528,10 @@ final class JDynAlloyXlatorVisitor extends JDynAlloyVisitor {
 		}
 
 		private final ProgramDeclaration program;
+
+		public ProgramDeclaration getProgram(){
+			return this.program;
+		}
 
 		private final AssertionDeclaration assertion;
 
@@ -557,7 +564,7 @@ final class JDynAlloyXlatorVisitor extends JDynAlloyVisitor {
 		Vector<Object> children = (Vector<Object>) super.visit(node);
 
 
-		ObjectCreationDetector newCallDetector = new ObjectCreationDetector();
+		ObjectCreationDetector newCallDetector = new ObjectCreationDetector(node.getProgramId(), this);
 		DynalloyProgram prog = (DynalloyProgram) children.get(2);
 		LinkedList<DynalloyProgram> list = new LinkedList<DynalloyProgram>();
 		list.add(new Skip());
@@ -669,7 +676,7 @@ final class JDynAlloyXlatorVisitor extends JDynAlloyVisitor {
 					}
 				}
 
-
+				hasObjectCreation = true;
 				if (hasObjectCreation){
 					// We will add a constraint to the precondition initializing "usedObjects".
 
@@ -702,7 +709,7 @@ final class JDynAlloyXlatorVisitor extends JDynAlloyVisitor {
 					Iterator<AlloyVariable> it = params.iterator();
 					while (it.hasNext()){
 						AlloyVariable av = it.next();
-						if (!av.getVariableId().getString().equals("throw"))
+						if (!av.getVariableId().getString().equals("throw") && !av.getVariableId().getString().equals("return"))
 							sources = new ExprUnion(sources, new ExprVariable(av));
 					}
 
@@ -718,7 +725,7 @@ final class JDynAlloyXlatorVisitor extends JDynAlloyVisitor {
 
 					AlloyExpression traversedFields = new ExprProduct(ExprConstant.buildExprConstant("none"), ExprConstant.buildExprConstant("none"));
 					for (AlloyVariable av : nonStaticFields){
-						if (nonStaticFields.getJAlloyType(av).isBinaryRelation() && !nonStaticFields.getJAlloyType(av).isSpecialType())
+						if (nonStaticFields.getJAlloyType(av).isBinaryRelation() && !nonStaticFields.getJAlloyType(av).isSpecialType() && notAllPrimitive(nonStaticFields.getJAlloyType(av).to()))
 							traversedFields = new ExprUnion(traversedFields, new ExprVariable(av));
 					}
 
@@ -739,6 +746,15 @@ final class JDynAlloyXlatorVisitor extends JDynAlloyVisitor {
 			}
 		} else
 			return new ProgramTranslationResult(programDeclaration, null, null, newPreds);
+	}
+
+	private boolean notAllPrimitive(Set<String> img) {
+
+		for (String s : img){
+			if (!s.equals("null") && !s.equals("JavaPrimitiveIntegerValue") && !s.equals("JavaPrimitiveLongValue") && !s.equals("JavaPrimitiveFLoatValue") && !s.equals("boolean"))
+				return true;
+		}
+		return false;
 	}
 
 
@@ -1601,7 +1617,7 @@ final class JDynAlloyXlatorVisitor extends JDynAlloyVisitor {
 	private Set<AlloyFormula> extract_object_invariant_formulas(String signatureToCheckId, String programId, JDynAlloyModule module) {
 		Set<AlloyFormula> object_invariant_formulas = new HashSet<AlloyFormula>();
 
-		if (isModifiable_object_invariants(programId, module.getObjectInvariants())) {
+		if (isModifiable_object_invariants(programId, module.getObjectInvariants()) || this.inputToFix != null) {
 
 			String signatureId = module.getSignature().getSignatureId();
 

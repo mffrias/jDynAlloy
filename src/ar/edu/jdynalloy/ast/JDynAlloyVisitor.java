@@ -197,9 +197,6 @@ public class JDynAlloyVisitor implements IJDynAlloyVisitor {
 		Vector<Object> field_results = new Vector<Object>();
 //		System.out.println("Module: " + node.getModuleId() + " FieldsSize = " + node.getFields().size());
 		try {
-			if (node.getFields().size() == 4){
-				System.out.println("Here!");
-			}
 			for (JField child : node.getFields()) {
 				field_results.add(child.accept(this));
 			}
@@ -346,7 +343,7 @@ public class JDynAlloyVisitor implements IJDynAlloyVisitor {
 			String fullyQualifiedMethodName = this.getFullyQualifiedMethodName();
 			if (this.specFromMethod.equals(fullyQualifiedMethodName)){
 				requiresResults = processInputToFix((HashMap<String, Object>)inputToFix, this.isJavaArithmetic);
-				inputToFix = null;
+				//inputToFix = null;
 			}
 		}
 
