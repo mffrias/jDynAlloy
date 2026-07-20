@@ -425,6 +425,19 @@ public class RelevancyAnalysisUtils {
 			if (javaPrimitiveLongValueFunctionsSet.contains(fc.getfunctionCallInAlloyFormulaInfo().getFunctionId()))
 				return;
 
+
+
+			Set<String> javaPrimitiveFloatValueFunctionsSet = new HashSet<String>();
+			Collections.addAll(javaPrimitiveFloatValueFunctionsSet,
+					"fun_java_primitive_float_value_add",
+					"fun_java_primitive_float_value_sub",
+					"fun_java_primitive_float_value_mul",
+					"fun_java_primitive_float_value_div",
+					"fun_java_lang_float_isNaN");
+			if (javaPrimitiveFloatValueFunctionsSet.contains(fc.getfunctionCallInAlloyFormulaInfo().getFunctionId()))
+				return;
+
+
 			Set<String> javaPrimitiveCharValueFunctionsSet = new HashSet<String>();
 			Collections.addAll(javaPrimitiveCharValueFunctionsSet,"fun_narrowing_cast_long_to_char");
 			if (javaPrimitiveCharValueFunctionsSet.contains(fc.getfunctionCallInAlloyFormulaInfo().getFunctionId()))

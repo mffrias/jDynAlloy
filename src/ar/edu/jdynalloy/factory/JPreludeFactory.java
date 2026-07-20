@@ -716,12 +716,12 @@ public abstract class JPreludeFactory {
 						getUnusedObject }));
 
 
-		if (moduleIds.contains("JavaPrimitiveFloatValue")){
-			bff.append("\n");
-			bff.append("fun fun_java_lang_float_isNaN[f : JavaPrimitiveFloatValue] : boolean {\n");
-			bff.append("	pred_java_primitive_float_value_is_NaN[f] => true else false\n");
-			bff.append("}\n");
-		}
+//		if (moduleIds.contains("JavaPrimitiveFloatValue")){
+//			bff.append("\n");
+//			bff.append("fun fun_java_lang_float_isNaN[f : JavaPrimitiveFloatValue] : boolean {\n");
+//			bff.append("	pred_java_primitive_float_value_is_NaN[f] => true else false\n");
+//			bff.append("}\n");
+//		}
 
 		//mfrias: prelude for object array with or without Java Integers
 

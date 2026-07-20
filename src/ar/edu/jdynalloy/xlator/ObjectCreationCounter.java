@@ -16,6 +16,14 @@ public class ObjectCreationCounter {
 		alloc_counter++;
 		this.allocations.put(type_str, alloc_counter);
 	}
+
+	public Map<String, Integer> getAllocations(){
+		return this.allocations;
+	}
+
+	public void setAllocations(String typeName, int theAmount) {
+		this.allocations.put(typeName, theAmount);
+	}
 	
 	public Set<String> signatureSet() {
 		return allocations.keySet();
