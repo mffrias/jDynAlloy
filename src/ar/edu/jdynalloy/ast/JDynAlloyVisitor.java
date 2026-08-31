@@ -338,7 +338,8 @@ public class JDynAlloyVisitor implements IJDynAlloyVisitor {
 				Object result = requires.accept(this);
 				requiresResults.add(result);
 			}
-		} else {
+		}
+		else {
 			String specFromMethod = this.specFromMethod;
 			String fullyQualifiedMethodName = this.getFullyQualifiedMethodName();
 			if (this.specFromMethod.equals(fullyQualifiedMethodName)){
