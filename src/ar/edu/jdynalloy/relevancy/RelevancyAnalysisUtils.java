@@ -346,6 +346,11 @@ public class RelevancyAnalysisUtils {
 					fc.getArgumentsTypes().get(1).toString().contains("JavaPrimitiveIntegerValue")){ //in this line we had equals("JavaPrimitiveIntegerValue")
 				return;
 			}
+			if (fc.getfunctionCallInAlloyFormulaInfo().getFunctionId().equals("arrayLength") &&
+					fc.getArgumentsTypes().get(0).toString().contains("java_lang_ObjectArray") && //in this line we had equals("java_lang_CharArray+null")
+					fc.getArgumentsTypes().get(1).toString().contains("JavaPrimitiveIntegerValue")){ //in this line we had equals("JavaPrimitiveIntegerValue")
+				return;
+			}
 			if (fc.getfunctionCallInAlloyFormulaInfo().getFunctionId().equals("arrayAccess") && 
 					fc.getArgumentsTypes().get(0).toString().contains("java_lang_IntArray") && //in this line we had equals("java_lang_IntArray+null")
 					fc.getArgumentsTypes().get(1).toString().contains("java_lang_IntArray")){ //in this line we had equals("java_lang_IntArray")
@@ -359,6 +364,11 @@ public class RelevancyAnalysisUtils {
 			if (fc.getfunctionCallInAlloyFormulaInfo().getFunctionId().equals("arrayAccess") && 
 					fc.getArgumentsTypes().get(0).toString().contains("java_lang_CharArray") && //in this line we had equals("java_lang_CharArray+null")
 					fc.getArgumentsTypes().get(1).toString().contains("java_lang_CharArray")){ //in this line we had equals("java_lang_CharArray")
+				return;
+			}
+			if (fc.getfunctionCallInAlloyFormulaInfo().getFunctionId().equals("arrayAccess") &&
+					fc.getArgumentsTypes().get(0).toString().contains("java_lang_ObjectArray") && //in this line we had equals("java_lang_CharArray+null")
+					fc.getArgumentsTypes().get(1).toString().contains("java_lang_ObjectArray")){ //in this line we had equals("java_lang_CharArray")
 				return;
 			}
 			if (fc.getfunctionCallInAlloyFormulaInfo().getFunctionId().equals("Not") && 
@@ -443,7 +453,7 @@ public class RelevancyAnalysisUtils {
 			if (javaPrimitiveCharValueFunctionsSet.contains(fc.getfunctionCallInAlloyFormulaInfo().getFunctionId()))
 				return;
 
-			throw new JDynAlloyException("Program " + fc.getfunctionCallInAlloyFormulaInfo().getFunctionId() + " called in specification cannot be found.");
+   			throw new JDynAlloyException("Program " + fc.getfunctionCallInAlloyFormulaInfo().getFunctionId() + " called in specification cannot be found.");
 		}
 		scene.addProgram(program);
 	}
