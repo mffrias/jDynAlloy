@@ -121,6 +121,13 @@ public class JSignature extends AlloySig {
 				buff.append("\n");
 			}
 		}
+		if (this.alloy_predicates.size() > 0){
+			buff.append("\n");
+			for (String aFact : this.alloy_predicates) {
+				buff.append(aFact);
+				buff.append("\n");
+			}
+		}
 
 		buff.append("}");
 		return buff.toString();

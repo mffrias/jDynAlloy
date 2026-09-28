@@ -29,6 +29,8 @@ import ar.uba.dc.rfm.alloy.ast.formulas.AlloyFormula;
 import ar.uba.dc.rfm.alloy.ast.formulas.PredicateFormula;
 import ar.uba.dc.rfm.dynalloy.ast.DynalloyModule;
 
+import static ar.edu.taco.simplejml.builtin.JavaPrimitiveFloatValue.create_literal_signature;
+
 public final class JDynAlloyTranslator {
 
 	private Object inputToFix = null;
@@ -203,7 +205,8 @@ public final class JDynAlloyTranslator {
 						ExprConstant theParam = new ExprConstant(null, s);
 						LinkedList<AlloyExpression> theParams = new LinkedList<>();
 						theParams.add(theParam);
-						String theNumber = s.substring(27);
+						int beginIndex = 27;
+						String theNumber = s.substring(beginIndex);
 						PredicateFormula pred = new PredicateFormula(null, "pred_java_primitive_integer_value_literal_" + theNumber, theParams);
 						HashSet<AlloyFormula> theFacts = new HashSet<AlloyFormula>();
 						theFacts.add(pred);		
@@ -220,10 +223,11 @@ public final class JDynAlloyTranslator {
 						ExprConstant theParam = new ExprConstant(null, s);
 						LinkedList<AlloyExpression> theParams = new LinkedList<>();
 						theParams.add(theParam);
-						String theNumber = s.substring(27);
+						int beginIndex = 24;
+						String theNumber = s.substring(beginIndex);
 						PredicateFormula pred = new PredicateFormula(null, "pred_java_primitive_long_value_literal_" + theNumber, theParams);
 						HashSet<AlloyFormula> theFacts = new HashSet<AlloyFormula>();
-						theFacts.add(pred);		
+						theFacts.add(pred);
 						JSignature sig = new JSignature(true, false, s, new JDynAlloyTyping(), false, "JavaPrimitiveLongValue", null, new HashSet<String>(), theFacts, new LinkedList<String>(), new LinkedList<String>(), new String[0]);
 						JDynAlloyModule lit = new JDynAlloyModule(s, sig, null, null, new LinkedList<JField>(), new HashSet<JClassInvariant>(), new HashSet<JClassConstraint>(), new HashSet<JObjectInvariant>(), new HashSet<JObjectConstraint>(), new HashSet<JRepresents>(), new HashSet<JProgramDeclaration>(), new AlloyTyping(), new LinkedList<AlloyFormula>(), true);
 						context.getRelevantModules().add(lit);
@@ -232,16 +236,21 @@ public final class JDynAlloyTranslator {
 					}
 				}
 				for (String s : visitor.floatsCollected){
+
 					if (!containsModule(context.getRelevantModules(), s)){
 						// Create new module and add it to relevant modules
 						ExprConstant theParam = new ExprConstant(null, s);
 						LinkedList<AlloyExpression> theParams = new LinkedList<>();
 						theParams.add(theParam);
-						String theNumber = s.substring(27);
+						int beginIndex = 25;
+						String theNumber = s.substring(beginIndex);
+						long parsedLong = Long.parseLong(theNumber, 16);
+						float actualFloat = Float.intBitsToFloat((int) parsedLong);
 						PredicateFormula pred = new PredicateFormula(null, "pred_java_primitive_float_value_literal_" + theNumber, theParams);
 						HashSet<AlloyFormula> theFacts = new HashSet<AlloyFormula>();
-						theFacts.add(pred);		
-						JSignature sig = new JSignature(true, false, s, new JDynAlloyTyping(), false, "JavaPrimitiveFloatValue", null, new HashSet<String>(), theFacts, new LinkedList<String>(), new LinkedList<String>(), new String[0]);
+						theFacts.add(pred);
+						JSignature sig = create_literal_signature(actualFloat);
+//						JSignature sig = new JSignature(true, false, s, new JDynAlloyTyping(), false, "JavaPrimitiveFloatValue", null, new HashSet<String>(), theFacts, new LinkedList<String>(), new LinkedList<String>(), new String[0]);
 						JDynAlloyModule lit = new JDynAlloyModule(s, sig, null, null, new LinkedList<JField>(), new HashSet<JClassInvariant>(), new HashSet<JClassConstraint>(), new HashSet<JObjectInvariant>(), new HashSet<JObjectConstraint>(), new HashSet<JRepresents>(), new HashSet<JProgramDeclaration>(), new AlloyTyping(), new LinkedList<AlloyFormula>(), true);
 						context.getRelevantModules().add(lit);
 						dynalloyModule = (DynalloyModule) lit.accept(visitor);
@@ -254,7 +263,8 @@ public final class JDynAlloyTranslator {
 						ExprConstant theParam = new ExprConstant(null, s);
 						LinkedList<AlloyExpression> theParams = new LinkedList<>();
 						theParams.add(theParam);
-						String theNumber = s.substring(27);
+						int beginIndex = 24;
+						String theNumber = s.substring(beginIndex);
 						PredicateFormula pred = new PredicateFormula(null, "pred_java_primitive_char_value_literal_" + theNumber, theParams);
 						HashSet<AlloyFormula> theFacts = new HashSet<AlloyFormula>();
 						theFacts.add(pred);		

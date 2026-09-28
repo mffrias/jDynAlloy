@@ -100,7 +100,7 @@ public class JavaPrimitiveFloatValue implements IBuiltInModule {
 				Collections.<AlloyExpression> emptyList());
 	}
 
-	private String bit_field(int i) {
+	private static String bit_field(int i) {
 		String bit_field = String.format("b%s%s", (i < 10 ? "0" : ""), i);
 		return bit_field;
 	}
@@ -131,7 +131,7 @@ public class JavaPrimitiveFloatValue implements IBuiltInModule {
 		return new ExprConstant(null, signatureId);
 	}
 
-	private boolean[] create_float_bit_vector(float float_value) {
+	private static boolean[] create_float_bit_vector(float float_value) {
 		int i = Float.floatToIntBits(float_value);
 		boolean[] bit_vector = new boolean[Integer.SIZE];
 		for (int k = 0; k < Integer.SIZE; k++) {
@@ -144,13 +144,13 @@ public class JavaPrimitiveFloatValue implements IBuiltInModule {
 		return bit_vector;
 	}
 
-	private String build_java_primitive_float_literal_predicate_id(float i) {
+	private static String build_java_primitive_float_literal_predicate_id(float i) {
 		String predicateId = "pred_java_primitive_float_value_literal_"
 				+ float_to_String(i);
 		return predicateId;
 	}
 
-	private String pred_java_primitive_long_value_literal(float i) {
+	private static String pred_java_primitive_float_value_literal(float i) {
 		StringBuffer buff = new StringBuffer();
 
 		String header_str;
@@ -180,13 +180,13 @@ public class JavaPrimitiveFloatValue implements IBuiltInModule {
 		return buff.toString();
 	}
 
-	private JSignature create_literal_signature(float float_literal) {
+	public static JSignature create_literal_signature(float float_literal) {
 
 		String float_bit_vector_str = float_to_String(float_literal);
 
 		List<String> alloy_preds = new LinkedList<String>();
 
-		String value_literal = pred_java_primitive_long_value_literal(float_literal);
+		String value_literal = pred_java_primitive_float_value_literal(float_literal);
 		alloy_preds.add(value_literal);
 
 		String literal_signature_id;
@@ -211,9 +211,9 @@ public class JavaPrimitiveFloatValue implements IBuiltInModule {
 		return literal_signature;
 	}
 
-	private String float_to_String(float float_literal) {
+	private static String float_to_String(float float_literal) {
 		int int_value = Float.floatToIntBits(float_literal);
-		String hex_string = Integer.toHexString(int_value).toUpperCase();
+		String hex_string =	 Integer.toHexString(int_value).toUpperCase();
 		return hex_string;
 	}
 
