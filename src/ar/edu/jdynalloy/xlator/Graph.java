@@ -20,10 +20,7 @@
 
 package ar.edu.jdynalloy.xlator;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 public class Graph<E> {
 	private Map<E, Set<E>> edges = new HashMap<E, Set<E>>();
@@ -31,6 +28,8 @@ public class Graph<E> {
 	private Set<E> nodes = new HashSet<E>();
 
 	private boolean allowCycles;
+
+	private Object extraData = null;
 
 	public Graph(boolean _allowCycles) {
 		super();
@@ -108,6 +107,13 @@ public class Graph<E> {
 			return false;
 	}
 
+	public void setExtraData(Object o){
+		this.extraData = o;
+	}
+
+	public Object getExtraData(){
+		return this.extraData;
+	}
 	public int hashCode() {
 		return nodes.hashCode() + edges.hashCode();
 	}
@@ -115,4 +121,22 @@ public class Graph<E> {
 	public String toString() {
 		return edges.toString();
 	}
+
+	public Queue<E> topologicalSortFromNode(E node){
+		Queue<E> result = new LinkedList<>();
+		Queue<E> pending = new LinkedList<>();
+		pending.offer(node);
+		while (!pending.isEmpty()){
+			E front = pending.poll();
+			result.offer(front);
+			Set<E> descendents = this.edges.get(front);
+			for (E d : descendents){
+				if (!result.contains(d) && !pending.contains(d)){
+					pending.offer(d);
+				}
+			}
+		}
+		return result;
+	}
+
 }

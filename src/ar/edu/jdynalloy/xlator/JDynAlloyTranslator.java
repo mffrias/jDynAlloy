@@ -120,6 +120,7 @@ public final class JDynAlloyTranslator {
 			module.accept(callGraphVisitor);
 		}
 		Graph<String> callGraph = callGraphVisitor.getCallGraph();
+		callGraph.setExtraData(ms);
 
 		// prune unused methods
 		String programToCheck = JDynAlloyConfig.getInstance().getMethodToCheck();

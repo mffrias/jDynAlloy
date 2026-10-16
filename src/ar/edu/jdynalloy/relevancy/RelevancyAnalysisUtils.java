@@ -127,9 +127,7 @@ public class RelevancyAnalysisUtils {
 
 				for (JProgramDeclaration programDeclaration : dynJAlloyModule
 						.getPrograms()) {
-					String qualifiedMethodName = programDeclaration
-							.getSignatureId()
-							+ "_" + programDeclaration.getProgramId() + "(" + filterParameters(programDeclaration.getParameters()) + ")";
+					String qualifiedMethodName = programDeclaration.getProgramId() + "(" + filterParameters(programDeclaration.getParameters()) + ")";
 					if (methodToCheck.equals(qualifiedMethodName)) {
 						methodToCheckDeclaration = programDeclaration;
 					}

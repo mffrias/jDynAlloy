@@ -13,9 +13,7 @@ import ar.edu.jdynalloy.factory.JExpressionFactory;
 import ar.edu.jdynalloy.factory.JPredicateFactory;
 
 
-import java.util.List;
-import java.util.HashSet;
-import java.util.LinkedList;
+import java.util.*;
 
 class RecursionUnfolderVisitor extends JDynAlloyMutator {
 
@@ -53,33 +51,38 @@ class RecursionUnfolderVisitor extends JDynAlloyMutator {
 //		String typedProgramId = programId + "(" + filterParameters(n.getParameters()) + ")";
 		assert (!programId.contains("("));
 
-		if (callGraph.containsNode(programId) && callGraph.childrenOf(programId).contains(programId)) {
-			for (int i=0; i<=unroll; i++) {
-				// create n-program declarations
+		if (callGraph.containsNode(programId) && callGraph.descendentsOf(programId).contains(programId)) {
 
-				boolean isAbstract = n.isAbstract();
-				String signatureId = n.getSignatureId();
-				String unfolded_programId = n.getProgramId() + "_unfold_" + i;
-				List<JVariableDeclaration> parameters = new LinkedList<JVariableDeclaration>(n.getParameters());
-				List<JSpecCase> specCases = new LinkedList<JSpecCase>(n.getSpecCases());
+			for (String prgId : callGraph.descendentsOf(programId)) {
+				Vector<JDynAlloyModule> theModules = (Vector<JDynAlloyModule>) callGraph.getExtraData();
+				n = retrieveProgram(prgId, callGraph.getExtraData());
+				for (int i = 0; i <= unroll; i++) {
+					// create n-program declarations
 
-				unfold_programId = programId;
-				unfold_index = i+1;
-				JStatement body = (JStatement) n.getBody().accept(this);
+					boolean isAbstract = n.isAbstract();
+					String signatureId = n.getSignatureId();
+					String unfolded_programId = n.getProgramId() + "_unfold_" + i;
+					List<JVariableDeclaration> parameters = new LinkedList<JVariableDeclaration>(n.getParameters());
+					List<JSpecCase> specCases = new LinkedList<JSpecCase>(n.getSpecCases());
 
-				JProgramDeclaration unfolded_program = new JProgramDeclaration(
-						isAbstract, 
-						n.isConstructor(),
-						n.isPure(),
-						signatureId,
-						unfolded_programId,
-						parameters,
-						specCases, 
-						body, null, null);
+					unfold_programId = programId;
+					unfold_index = i + 1;
+					JStatement body = (JStatement) n.getBody().accept(this);
 
-				unfolded_programs.add(unfolded_program);
+					JProgramDeclaration unfolded_program = new JProgramDeclaration(
+							isAbstract,
+							n.isConstructor(),
+							n.isPure(),
+							signatureId,
+							unfolded_programId,
+							parameters,
+							specCases,
+							body, null, null);
+
+					unfolded_programs.add(unfolded_program);
+				}
+				unfold_index = 0;
 			}
-			unfold_index = 0;
 
 			// update original program declaration
 			JStatement updated_body = (JStatement) n.getBody().accept(this);
@@ -104,6 +107,19 @@ class RecursionUnfolderVisitor extends JDynAlloyMutator {
 			JProgramDeclaration ret = (JProgramDeclaration)super.visit(n);
 			return ret;
 		}
+	}
+
+	private JProgramDeclaration retrieveProgram(String prgId, Object extraData) {
+		Vector<JDynAlloyModule> theModules = (Vector<JDynAlloyModule>)extraData;
+		for (JDynAlloyModule jdm : theModules){
+			for (JProgramDeclaration jpd : jdm.getPrograms()){
+				if (jpd.getProgramId().equals(prgId)){
+					return jpd;
+				}
+			}
+		}
+		return null;
+
 	}
 
 	private String filterParameters(List<JVariableDeclaration> parameters) {
@@ -144,8 +160,8 @@ class RecursionUnfolderVisitor extends JDynAlloyMutator {
 
 	@Override
 	public Object visit(JProgramCall n) {
-		if (unfold_index!=-1 && unfold_programId!=null) {
-			if (n.getProgramId().equals(unfold_programId)) {
+		if (unfold_index!=-1 && unfold_programId != null) {
+			if (callGraph.descendentsOf(n.getProgramId()).contains(unfold_programId)) {//if (n.getProgramId().equals(unfold_programId)) {
 				if (unfold_index < unroll) {
 					boolean isSuperCall = n.isSuperCall();
 					String programId = n.getProgramId() + "_unfold_" + unfold_index;

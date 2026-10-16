@@ -75,7 +75,7 @@ class VAlloyVisitor extends JDynAlloyMutator {
 
 	private String resolveUniqueProgramId(JProgramDeclaration d) {
 		if (!programs.containsKey(d)) {
-			String prefix = d.getSignatureId() + "_" + d.getProgramId();
+			String prefix = /*d.getSignatureId() + "_" +*/ d.getProgramId();
 			if (!prefixes.containsKey(prefix))
 				prefixes.put(prefix, -1);
 			else {
