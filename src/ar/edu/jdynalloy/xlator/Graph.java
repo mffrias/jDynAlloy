@@ -20,6 +20,8 @@
 
 package ar.edu.jdynalloy.xlator;
 
+import ar.uba.dc.rfm.alloy.AlloyCheckCommand;
+
 import java.util.*;
 
 public class Graph<E> {
@@ -139,4 +141,12 @@ public class Graph<E> {
 		return result;
 	}
 
+	public Set<E> strictDescendentsOf(E programId) {
+		Set<E> children = this.childrenOf(programId);
+		Set<E> strict = new HashSet<E>();
+		for (E e : children){
+			strict.addAll(this.descendentsOf(e));
+		}
+		return strict;
+	}
 }

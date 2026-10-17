@@ -51,7 +51,7 @@ class RecursionUnfolderVisitor extends JDynAlloyMutator {
 //		String typedProgramId = programId + "(" + filterParameters(n.getParameters()) + ")";
 		assert (!programId.contains("("));
 
-		if (callGraph.containsNode(programId) && callGraph.descendentsOf(programId).contains(programId)) {
+		if (callGraph.containsNode(programId) && (callGraph.childrenOf(programId).contains(programId) || callGraph.strictDescendentsOf(programId).contains(programId)))  {// descendentsOf(programId).contains(programId)) {
 
 			for (String prgId : callGraph.descendentsOf(programId)) {
 				Vector<JDynAlloyModule> theModules = (Vector<JDynAlloyModule>) callGraph.getExtraData();
