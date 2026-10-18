@@ -97,15 +97,12 @@ class ModifiesTableBuilder {
 					.get(programId);
 			modifiesFields.addAll(directFields);
 
-// This has to be added back once the naming convention is fixed		
-//			
-//			
-//			for (String descendentId : callGraph.descendentsOf(programId)) {
-//				Set<AlloyVariable> descendentFields = directModifiesTable.get(descendentId);
-//				modifiesFields.addAll(descendentFields);
-//			}
-//			
-//			modifiesTable.put(programId, modifiesFields);
+			for (String descendentId : callGraph.descendentsOf(programId)) {
+				Set<AlloyVariable> descendentFields = directModifiesTable.get(descendentId);
+				modifiesFields.addAll(descendentFields);
+			}
+
+			modifiesTable.put(programId, modifiesFields);
 		}
 
 		return modifiesTable;
