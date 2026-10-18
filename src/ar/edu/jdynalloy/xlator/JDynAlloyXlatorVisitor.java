@@ -1823,9 +1823,8 @@ final class JDynAlloyXlatorVisitor extends JDynAlloyVisitor {
 	
 	@Override
 	public String getFullyQualifiedMethodName(){
-		String className = this.classToCheck.replace('.', '_');
-		String classPlusMethod = className + "_" + this.methodToCheck;
-		return classPlusMethod;
+		// TACO's methodToCheck already starts with the class: <package>_<Class>_<method>
+		return this.methodToCheck;
 	}
 	
 	
