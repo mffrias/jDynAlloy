@@ -3,6 +3,7 @@ package ar.edu.jdynalloy.xlator;
 import ar.uba.dc.rfm.alloy.ast.expressions.AlloyExpression;
 import ar.edu.jdynalloy.ast.JDynAlloyModule;
 import ar.edu.jdynalloy.ast.JDynAlloyMutator;
+import ar.edu.jdynalloy.ast.JDynAlloyVisitor;
 import ar.edu.jdynalloy.ast.JAssume;
 import ar.edu.jdynalloy.ast.JProgramCall;
 import ar.edu.jdynalloy.ast.JProgramDeclaration;
@@ -17,7 +18,12 @@ import java.util.*;
 
 class RecursionUnfolderVisitor extends JDynAlloyMutator {
 
+	// Programs are identified by name and parameter types, as JBindingKey does, so that overloads
+	// (two constructors, for example) are not taken for one recursive program. The call graph
+	// handed in, keyed by name alone, only provides the modules.
 	private final Graph<String> callGraph;
+
+	private final Map<String, List<JProgramDeclaration>> programsById = new HashMap<String, List<JProgramDeclaration>>();
 
 	private final List<JProgramDeclaration> unfolded_programs;
 
@@ -29,7 +35,19 @@ class RecursionUnfolderVisitor extends JDynAlloyMutator {
 
 	public RecursionUnfolderVisitor(Graph<String> callGraph, int unroll, boolean isJavaArith) {
 		super(isJavaArith);
-		this.callGraph = callGraph;
+		Vector<JDynAlloyModule> modules = (Vector<JDynAlloyModule>) callGraph.getExtraData();
+		for (JDynAlloyModule module : modules) {
+			for (JProgramDeclaration program : module.getPrograms()) {
+				if (!programsById.containsKey(program.getProgramId()))
+					programsById.put(program.getProgramId(), new LinkedList<JProgramDeclaration>());
+				programsById.get(program.getProgramId()).add(program);
+			}
+		}
+		TypedCallGraphBuilder builder = new TypedCallGraphBuilder(isJavaArith);
+		for (JDynAlloyModule module : modules) {
+			module.accept(builder);
+		}
+		this.callGraph = builder.graph;
 		this.unfolded_programs = new LinkedList<JProgramDeclaration>();
 		this.unroll = unroll;
 	}
@@ -51,11 +69,12 @@ class RecursionUnfolderVisitor extends JDynAlloyMutator {
 //		String typedProgramId = programId + "(" + filterParameters(n.getParameters()) + ")";
 		assert (!programId.contains("("));
 
-		if (callGraph.containsNode(programId) && (callGraph.childrenOf(programId).contains(programId) || callGraph.strictDescendentsOf(programId).contains(programId)))  {// descendentsOf(programId).contains(programId)) {
+		String programKey = programKey(n);
 
-			for (String prgId : callGraph.descendentsOf(programId)) {
-				Vector<JDynAlloyModule> theModules = (Vector<JDynAlloyModule>) callGraph.getExtraData();
-				n = retrieveProgram(prgId, callGraph.getExtraData());
+		if (callGraph.containsNode(programKey) && (callGraph.childrenOf(programKey).contains(programKey) || callGraph.strictDescendentsOf(programKey).contains(programKey)))  {// descendentsOf(programId).contains(programId)) {
+
+			for (String prgKey : callGraph.descendentsOf(programKey)) {
+				n = retrieveProgram(prgKey);
 				for (int i = 0; i <= unroll; i++) {
 					// create n-program declarations
 
@@ -65,7 +84,7 @@ class RecursionUnfolderVisitor extends JDynAlloyMutator {
 					List<JVariableDeclaration> parameters = new LinkedList<JVariableDeclaration>(n.getParameters());
 					List<JSpecCase> specCases = new LinkedList<JSpecCase>(n.getSpecCases());
 
-					unfold_programId = programId;
+					unfold_programId = programKey;
 					unfold_index = i + 1;
 					JStatement body = (JStatement) n.getBody().accept(this);
 
@@ -109,17 +128,64 @@ class RecursionUnfolderVisitor extends JDynAlloyMutator {
 		}
 	}
 
-	private JProgramDeclaration retrieveProgram(String prgId, Object extraData) {
-		Vector<JDynAlloyModule> theModules = (Vector<JDynAlloyModule>)extraData;
-		for (JDynAlloyModule jdm : theModules){
-			for (JProgramDeclaration jpd : jdm.getPrograms()){
-				if (jpd.getProgramId().equals(prgId)){
+	private JProgramDeclaration retrieveProgram(String prgKey) {
+		for (List<JProgramDeclaration> programs : programsById.values()) {
+			for (JProgramDeclaration jpd : programs) {
+				if (programKey(jpd).equals(prgKey)) {
 					return jpd;
 				}
 			}
 		}
 		return null;
+	}
 
+	// The program's name and parameter types, e.g. ximena_MutRecursive_MutRecursive(int).
+	private String programKey(JProgramDeclaration program) {
+		return program.getProgramId() + "(" + filterParameters(program.getParameters()) + ")";
+	}
+
+	// The programs a call may invoke: those with its name and number of arguments, which is how
+	// DynAlloy tells programs apart. Two overloads with the same number of parameters both qualify.
+	private List<String> calleeKeys(JProgramCall call) {
+		List<String> keys = new LinkedList<String>();
+		if (programsById.containsKey(call.getProgramId())) {
+			for (JProgramDeclaration program : programsById.get(call.getProgramId())) {
+				if (program.getParameters().size() == call.getArguments().size())
+					keys.add(programKey(program));
+			}
+		}
+		if (keys.isEmpty())
+			keys.add(call.getProgramId() + "(" + call.getArguments().size() + " arguments)");
+		return keys;
+	}
+
+	private final class TypedCallGraphBuilder extends JDynAlloyVisitor {
+
+		private final Graph<String> graph = new Graph<String>(true);
+
+		private String currentProgram;
+
+		TypedCallGraphBuilder(boolean isJavaArith) {
+			super(isJavaArith);
+		}
+
+		@Override
+		public Object visit(JProgramDeclaration node) {
+			currentProgram = programKey(node);
+			if (!graph.containsNode(currentProgram))
+				graph.addNode(currentProgram);
+			return super.visit(node);
+		}
+
+		@Override
+		public Object visit(JProgramCall n) {
+			for (String callee : calleeKeys(n)) {
+				if (!graph.containsNode(callee))
+					graph.addNode(callee);
+				graph.addEdge(currentProgram, callee);
+			}
+			return super.visit(n);
+		}
 	}
 
 	private String filterParameters(List<JVariableDeclaration> parameters) {
@@ -161,7 +227,7 @@ class RecursionUnfolderVisitor extends JDynAlloyMutator {
 	@Override
 	public Object visit(JProgramCall n) {
 		if (unfold_index!=-1 && unfold_programId != null) {
-			if (callGraph.descendentsOf(n.getProgramId()).contains(unfold_programId)) {//if (n.getProgramId().equals(unfold_programId)) {
+			if (reaches(n, unfold_programId)) {//if (n.getProgramId().equals(unfold_programId)) {
 				if (unfold_index < unroll) {
 					boolean isSuperCall = n.isSuperCall();
 					String programId = n.getProgramId() + "_unfold_" + unfold_index;
@@ -175,6 +241,15 @@ class RecursionUnfolderVisitor extends JDynAlloyMutator {
 		}
 		JProgramCall ret = (JProgramCall)super.visit(n);
 		return ret;
+	}
+
+	// Whether the call may lead back to the program with the given key.
+	private boolean reaches(JProgramCall call, String programKey) {
+		for (String callee : calleeKeys(call)) {
+			if (callGraph.containsNode(callee) && callGraph.descendentsOf(callee).contains(programKey))
+				return true;
+		}
+		return false;
 	}
 
 
