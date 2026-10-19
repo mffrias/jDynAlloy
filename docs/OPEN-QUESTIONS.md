@@ -40,3 +40,12 @@ Points where the code does not say what was intended, for the maintainer
    `binding/BindingManager.java`); the others say nothing. Should a `LICENSE`
    file say GPL version 2 or later for the whole repository? (TACO's headers
    say the same, and its `COPYING` has the text of version 3.)
+
+## From the Javadoc pass
+
+9. **The `_0` fallback for fields** (`binding/symboltable/SymbolTable.java:133-155`,
+   `lookupField`): a field that is not found, and whose name starts with
+   `SK_jml_pred_java_primitive` or `SK_pred_java_primitive`, is looked up again with `_0`
+   appended, in any module. Nothing in jDynAlloy or TACO creates such names. Which fields get
+   the suffix, and is the fallback still needed? (When the receiver's own module has the `_0`
+   field, the code returns the lookup of the original name, i.e. null.)

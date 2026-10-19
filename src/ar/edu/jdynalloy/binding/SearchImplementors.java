@@ -30,33 +30,81 @@ import ar.edu.jdynalloy.ast.JProgramDeclaration;
 import ar.edu.jdynalloy.xlator.JDynAlloyContext;
 
 
+/**
+ * Meant to find, for each {@code virtual} program, the programs that implement it in the
+ * subclasses of its signature, for {@code VAlloyVisitor}'s dynamic dispatch.
+ * {@link BindingManager#execute()} runs it and stores the result in the
+ * {@code JDynAlloyBinding}.
+ *
+ * <p>It never finds anything: {@link #searchImplementors()} compares each program's key with
+ * itself and never puts a list in the map it returns. See docs/KNOWN-LIMITATIONS.md ("Dynamic
+ * dispatch does not work") and docs/OPEN-QUESTIONS.md (4).
+ */
 public class SearchImplementors {
 
 	Map<JBindingKey, JProgramDeclaration> programBindings;
 	JDynAlloyContext dynJAlloyContext;
 	
+	/**
+	 * Creates a search over the given programs.
+	 *
+	 * @param programBindings every program, keyed by {@link JBindingKey} (from
+	 *        {@code ProgramDeclarationCollectorVisitor})
+	 * @param dynJAlloyContext the context of the same modules, for the class hierarchy
+	 */
 	public SearchImplementors(Map<JBindingKey, JProgramDeclaration> programBindings, JDynAlloyContext dynJAlloyContext) {
 		super();
 		this.programBindings = programBindings;
 		this.dynJAlloyContext = dynJAlloyContext;
 	}
 
+	/**
+	 * Returns the programs searched.
+	 *
+	 * @return the map given to the constructor or to {@link #setProgramBindings(Map)}
+	 */
 	public Map<JBindingKey, JProgramDeclaration> getProgramBindings() {
 		return programBindings;
 	}
 
+	/**
+	 * Replaces the programs to search.
+	 *
+	 * @param programBindings every program, keyed by {@link JBindingKey}
+	 */
 	public void setProgramBindings(Map<JBindingKey, JProgramDeclaration> programBindings) {
 		this.programBindings = programBindings;
 	}
 
+	/**
+	 * Returns the context used for the class hierarchy.
+	 *
+	 * @return the context
+	 */
 	public JDynAlloyContext getDynJAlloyContext() {
 		return dynJAlloyContext;
 	}
 
+	/**
+	 * Replaces the context used for the class hierarchy.
+	 *
+	 * @param dynJAlloyContext the new context
+	 */
 	public void setDynJAlloyContext(JDynAlloyContext dynJAlloyContext) {
 		this.dynJAlloyContext = dynJAlloyContext;
 	}
 
+	/**
+	 * Returns an empty map. It is meant to map each {@code virtual} program to the programs
+	 * with the same key, module id aside, in the strict subclasses of its signature. But the
+	 * inner loop reads {@code entry} where it means {@code inspectedEntry}, so it compares
+	 * each key with itself, whose module is not a strict subclass of itself; and the list it
+	 * builds is never put in the map. Even with both fixed,
+	 * {@link JBindingKey#equalsWithOutModuleId(JBindingKey)} compares the receiver types,
+	 * which differ between a class and its subclasses.
+	 *
+	 * @return an identity map from virtual programs to their implementors; always empty
+	 */
 	public IdentityHashMap<JProgramDeclaration, List<JProgramDeclaration>> searchImplementors() {
 		IdentityHashMap<JProgramDeclaration, List<JProgramDeclaration>> implementationsFoundSet = new IdentityHashMap<JProgramDeclaration, List<JProgramDeclaration>>();
 		for(Entry<JBindingKey, JProgramDeclaration> entry : programBindings.entrySet()) {

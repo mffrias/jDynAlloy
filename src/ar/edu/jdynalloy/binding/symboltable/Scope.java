@@ -26,6 +26,12 @@ import java.util.Map.Entry;
 import ar.edu.jdynalloy.JDynAlloySemanticException;
 import ar.uba.dc.rfm.alloy.VariableId;
 
+/**
+ * One level of a {@link SymbolTable}: the variables declared in a module, a program, a block or
+ * a quantifier, each with its {@link SymbolCell}. {@code SymbolTable} creates and stacks the
+ * scopes; nothing else does. Two scopes are equal when they declare the same variables (a cell's
+ * equality ignores its type).
+ */
 public class Scope {
 	Map<VariableId,SymbolCell> localTable ;
 	
@@ -33,6 +39,15 @@ public class Scope {
 		localTable = new HashMap<VariableId, SymbolCell>();
 	}
 	
+	/**
+	 * Declares a variable in this scope only. {@code SymbolTable} checks every scope before it
+	 * calls this, so from there the exception is never thrown.
+	 *
+	 * @param variableId the variable
+	 * @param symbolCell its cell
+	 * @throws JDynAlloySemanticException if this scope already declares it ("Duplicate variable
+	 *         in scope")
+	 */
 	public void insert(VariableId variableId, SymbolCell symbolCell) {
 		if (this.localTable.containsKey(variableId)) {
 			throw new JDynAlloySemanticException("Duplicate variable in scope: " + variableId);

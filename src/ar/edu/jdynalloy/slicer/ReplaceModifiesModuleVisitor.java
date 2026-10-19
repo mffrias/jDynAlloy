@@ -44,6 +44,15 @@ import ar.edu.jdynalloy.ast.JSpecCase;
 import ar.edu.jdynalloy.ast.JVariableDeclaration;
 import ar.edu.jdynalloy.ast.JWhile;
 
+/**
+ * An unused, package-private, reduced copy of {@code modifies/ReplaceModifiesModuleVisitor}, the
+ * visitor that {@code ModifiesSolverManager} runs; nothing in this package creates it
+ * (docs/OPEN-QUESTIONS.md, item 7). Every visit returns its node unchanged, except
+ * {@link #visit(JProgramDeclaration)}; it adds no frame conditions. Since
+ * {@code visit(JDynAlloyModule)} returns the module without visiting its programs, a module
+ * passed to it comes back as it is. It reads {@code JDynAlloyConfig.getInstance()} only in
+ * {@code visit(JProgramDeclaration)}. No static state.
+ */
 class ReplaceModifiesModuleVisitor extends JDynAlloyVisitor {
 
 	public ReplaceModifiesModuleVisitor(boolean isJavaArithmetic) {
@@ -113,6 +122,18 @@ class ReplaceModifiesModuleVisitor extends JDynAlloyVisitor {
 		return n;
 	}
 
+	/**
+	 * For the method under analysis, returns a copy of the program with the same parts but no
+	 * variables and predicates for the arithmetic of its {@code requires} and {@code ensures}
+	 * (both null); for any other program, the program itself. The method under analysis is the
+	 * program with {@code methodToCheck.startsWith(<signature>_<program>_)}, the test of
+	 * {@code modifies/ReplaceModifiesModuleVisitor}, which TACO's names never match
+	 * (docs/KNOWN-LIMITATIONS.md, "{@code modifies} clauses add no frame conditions";
+	 * docs/OPEN-QUESTIONS.md, item 2).
+	 *
+	 * @param node the program
+	 * @return the copy or {@code node}
+	 */
 	@Override
 	public Object visit(JProgramDeclaration node) {
 

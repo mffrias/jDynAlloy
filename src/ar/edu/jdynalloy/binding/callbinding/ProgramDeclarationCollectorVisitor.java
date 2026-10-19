@@ -27,6 +27,12 @@ import ar.edu.jdynalloy.ast.JDynAlloyVisitor;
 import ar.edu.jdynalloy.ast.JProgramDeclaration;
 import ar.edu.jdynalloy.binding.JBindingKey;
 
+/**
+ * The visitor of {@link ar.edu.jdynalloy.binding.BindingManager#execute()} that collects every
+ * program of the visited modules into {@link #getProgramBindings()}, keyed by
+ * {@link JBindingKey#JBindingKey(JProgramDeclaration)}, for {@link CallBindingResolver} and
+ * {@code SearchImplementors}. One instance is run on all modules.
+ */
 public class ProgramDeclarationCollectorVisitor extends JDynAlloyVisitor {
 
 
@@ -45,6 +51,13 @@ public class ProgramDeclarationCollectorVisitor extends JDynAlloyVisitor {
 		return super.visit(node);
 	}
 
+	/**
+	 * Puts the program in the map under its key; a program whose key equals an earlier one's
+	 * replaces it. The body is not visited.
+	 *
+	 * @param programDeclaration the program
+	 * @return null
+	 */
 	@Override
 	public Object visit(JProgramDeclaration programDeclaration) {
 		JBindingKey bindingKey = new JBindingKey(programDeclaration);

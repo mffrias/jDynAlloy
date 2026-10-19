@@ -48,16 +48,41 @@ import ar.uba.dc.rfm.alloy.ast.expressions.ExprVariable;
 import ar.uba.dc.rfm.alloy.ast.expressions.ExpressionVisitor;
 import ar.uba.dc.rfm.alloy.ast.formulas.FormulaVisitor;
 
+/**
+ * Computes the {@link JType} of an Alloy expression in JDynAlloy: each {@code visit} returns the
+ * type of its expression. Variables are looked up in the {@link SymbolTable} (local variables,
+ * then fields by name), the field of a join by the type of its left side, constants by their
+ * name, functions by fixed tables of the prelude's and the Java-arithmetic modules' functions or
+ * by their declared return type. Used to type call arguments for the bindings
+ * ({@link SemanticCheckVisitor} and the call collectors), in the relevancy analysis
+ * ({@code RelevantAnalysisExpressionTypeResolver} extends it) and in {@code FieldModifiesCase}.
+ *
+ * <p>Several expressions take the type of their left operand alone: override, intersection and
+ * the {@code if}-expression; a product is the relation between its operands' types; a sum and an
+ * integer literal are {@code Int}; a set comprehension is typed {@code boolean}, not as a set.
+ */
 public class ExpressionTypeResolver extends ExpressionVisitor {
 
 	SymbolTable symbolTable;
 
 
+	/**
+	 * Creates a resolver without formula visitor: the formulas inside expressions (the condition of
+	 * an {@code if}-expression, the body of a comprehension) are not visited.
+	 *
+	 * @param symbolTable the variables in scope and the fields
+	 */
 	public ExpressionTypeResolver(SymbolTable symbolTable) {
 		super();
 		this.symbolTable = symbolTable;
 	}
 
+	/**
+	 * Creates a resolver that visits the formulas inside expressions with {@code formulaVisitor}.
+	 *
+	 * @param formulaVisitor the visitor for nested formulas, or null
+	 * @param symbolTable the variables in scope and the fields
+	 */
 	public ExpressionTypeResolver(FormulaVisitor formulaVisitor,
 			SymbolTable symbolTable) {
 		super();
@@ -65,6 +90,15 @@ public class ExpressionTypeResolver extends ExpressionVisitor {
 		this.symbolTable = symbolTable;
 	}
 
+	/**
+	 * Types a constant by its name: {@code null}; a name starting with {@code Char} is
+	 * {@code char}, with {@code String} {@code java_lang_String}, with {@code true} or
+	 * {@code false} {@code boolean}; any other name is parsed as a type (a signature, such as a
+	 * literal or a class).
+	 *
+	 * @param exprConstant the constant
+	 * @return its type
+	 */
 	@Override
 	public Object visit(ExprConstant exprConstant) {
 		JType type;
@@ -88,6 +122,23 @@ public class ExpressionTypeResolver extends ExpressionVisitor {
 		return type;
 	}
 
+	/**
+	 * Types a function call by its name, after visiting its arguments: the prelude's integer
+	 * functions ({@code add}, {@code sub}, ..., the sizes, {@code arrayLength}) are {@code Int}; the
+	 * Java-arithmetic ones are {@code JavaPrimitiveLongValue} or {@code JavaPrimitiveIntegerValue}
+	 * (and so is {@code fun_narrowing_cast_long_to_char}, although
+	 * {@code JSignatureFactory.JAVA_PRIMITIVE_CHAR_VALUE} exists); the boolean ones, and any name
+	 * containing {@code _equals}, are {@code boolean}; the collection accessors and
+	 * {@code arrayAccess} are {@code java_lang_Object}; {@code fun_reach} is
+	 * {@code org_jmlspecs_models_JMLObjectSet}; closures and relation operations are
+	 * {@code univ->univ}; {@code fun_set_difference} is {@code java_lang_Set} (not
+	 * {@code java_util_Set}); any other function has its declared return type.
+	 *
+	 * @param n the function call
+	 * @return its type
+	 * @throws JDynAlloyNotImplementedYetException for a function that is in no table and has no
+	 *         return type ("Function not implemented for Type Resolution")
+	 */
 	@Override
 	public Object visit(ExprFunction n) {
 
@@ -227,6 +278,18 @@ public class ExpressionTypeResolver extends ExpressionVisitor {
 		return new JType(JSignatureFactory.INT.getSignatureId());
 	}
 
+	/**
+	 * Types a join {@code l.r} from the type of {@code l}: if {@code r} is a variable, the type of
+	 * field {@code r} of {@code l}'s signature ({@code singletonFrom()}); if a function, the image of
+	 * its type, which must be a relation; if a join, the type of {@code r} alone; if a union of two
+	 * types that are not relations, the union of their domains; if {@code univ}, the domain of
+	 * {@code l}; if a product (a static field read through an instance), the type of its right side.
+	 *
+	 * @param n the join
+	 * @return its type
+	 * @throws JDynAlloySemanticException for any other right side ("Invalid 'Join' expression"),
+	 *         or if the field is unknown
+	 */
 	@Override
 	public Object visit(ExprJoin n) {
 
@@ -334,6 +397,13 @@ public class ExpressionTypeResolver extends ExpressionVisitor {
 		}
 	}
 
+	/**
+	 * Types a union by parsing its text as a type, which works for unions of signature names such
+	 * as {@code A+null}.
+	 *
+	 * @param n the union
+	 * @return the parsed type
+	 */
 	@Override
 	public Object visit(ExprUnion n) {
 		Object ret_val = super.visit(n);
@@ -342,6 +412,15 @@ public class ExpressionTypeResolver extends ExpressionVisitor {
 		return type;
 	}
 
+	/**
+	 * Types a variable: from the innermost scope that declares it, otherwise as the field of that
+	 * name in any module ({@code lookupField(null, name)}).
+	 *
+	 * @param n the variable
+	 * @return its type
+	 * @throws JDynAlloySemanticException if it is neither ("Field doesn't exist", from the symbol
+	 *         table)
+	 */
 	@Override
 	public Object visit(ExprVariable n) {
 		SymbolCell symbolCell = symbolTable.lookup(n.getVariable()
@@ -367,6 +446,14 @@ public class ExpressionTypeResolver extends ExpressionVisitor {
 		return new JType(JSignatureFactory.INT.getSignatureId());
 	}
 
+	/**
+	 * Types an {@code if}-expression as its left branch. It is meant to check that both branches
+	 * have the same type ("left expression and right expression type must be equals"), but it types
+	 * the left branch twice, so the check never fails.
+	 *
+	 * @param e the expression
+	 * @return the left branch's type
+	 */
 	@Override
 	public Object visit(ExprIfCondition e) {
 		super.visit(e);
@@ -382,6 +469,13 @@ public class ExpressionTypeResolver extends ExpressionVisitor {
 		return leftType;
 	}
 
+	/**
+	 * Declares the comprehension's variables, typed by their bounds, in a new scope of the symbol
+	 * table, visits the comprehension, and closes the scope.
+	 *
+	 * @param e the comprehension
+	 * @return {@code boolean}, not the type of the set
+	 */
 	@Override
 	public Object visit(ExprComprehension e) {
 		this.symbolTable.beginScope();

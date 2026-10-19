@@ -35,6 +35,11 @@ import ar.uba.dc.rfm.alloy.ast.formulas.JFormulaVisitor;
 import ar.uba.dc.rfm.alloy.ast.formulas.PredicateCallAlloyFormula;
 import ar.uba.dc.rfm.alloy.ast.formulas.QuantifiedFormula;
 
+/**
+ * Collects the {@code callSpec}/{@code staticCallSpec} formulas of a formula, with their argument
+ * types, declaring quantified variables in the symbol table as it goes: the same as
+ * {@link PredicateAndFunctionCallCollectorVisitor} without the function calls. Unused.
+ */
 public class PredicateCallCollectorVisitor extends JFormulaVisitor {
 
     private SymbolTable symbolTable;

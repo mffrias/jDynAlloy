@@ -39,6 +39,23 @@ import ar.edu.jdynalloy.xlator.JType;
 import ar.edu.jdynalloy.xlator.JTypeHelper;
 import ar.uba.dc.rfm.alloy.ast.formulas.IProgramCall;
 
+/**
+ * Resolves each call to a program: the step of
+ * {@link ar.edu.jdynalloy.binding.BindingManager#execute()} after {@link SemanticCheckVisitor}
+ * has keyed every call. In go the programs by key ({@link ProgramDeclarationCollectorVisitor})
+ * and the calls with their keys; out comes {@link #getBinding()}, an identity map from each call
+ * to its program, from which {@code BindingManager} builds the {@code JDynAlloyBinding}.
+ *
+ * <p>The candidates for a call are the programs of the same kind (both static; or both instance,
+ * with the call's receiver type equal to the program's {@code thiz} type or a subclass of it),
+ * with the same program id and the same number of arguments ({@code throw} excluded); then the
+ * most specific candidate is chosen by argument types ({@link #resolveBinding()}). See
+ * docs/ARCHITECTURE.md ("How TACO calls it", step 1) and docs/NAMING.md.
+ *
+ * <p>It extends {@code JDynAlloyVisitor} but overrides no {@code visit} method and is not used
+ * as a visitor. The constructor that takes only a flag leaves the programs, calls and context
+ * null, and there is no setter for the programs; it is unused.
+ */
 public class CallBindingResolver extends JDynAlloyVisitor {
 
 	private static Logger log = Logger.getLogger(CallBindingResolver.class);
@@ -57,6 +74,15 @@ public class CallBindingResolver extends JDynAlloyVisitor {
 		super(isJavaArithmetic);
 	}
 
+	/**
+	 * Creates a resolver; {@link #resolveBinding()} does the work.
+	 *
+	 * @param dynJAlloyContext the context of the modules, for the class hierarchy
+	 *        ({@code descendantsOf})
+	 * @param programBindings every program, keyed by {@link JBindingKey}
+	 * @param callBindings every call, with the key built from its argument types
+	 * @param isJavaArithmetic passed to {@code JDynAlloyVisitor}; not otherwise used
+	 */
 	public CallBindingResolver(JDynAlloyContext dynJAlloyContext, Map<JBindingKey, JProgramDeclaration> programBindings,
 			IdentityHashMap<IProgramCall, JBindingKey> callBindings, boolean isJavaArithmetic) {
 		super(isJavaArithmetic);
@@ -81,10 +107,42 @@ public class CallBindingResolver extends JDynAlloyVisitor {
 		this.callBindings = callBindings;
 	}
 
+	/**
+	 * Returns each call with its program. The map is filled by {@link #resolveBinding()}, so it is
+	 * empty before that.
+	 *
+	 * @return the identity map from calls to programs (the map itself)
+	 */
 	public IdentityHashMap<IProgramCall, JProgramDeclaration> getBinding() {
 		return binding;
 	}
 
+	/**
+	 * Resolves every call and puts it, with its program, in {@link #getBinding()}. For each call it
+	 * takes the candidates described in the class comment and then:
+	 * <ul>
+	 * <li>with one candidate, takes it without checking the argument types;</li>
+	 * <li>with several, drops in rounds every candidate that the call's argument types do not fit
+	 *     (each argument of the parameter's signature or a strict subclass of it) and every
+	 *     candidate that another candidate's parameter types fit (the other being at least as
+	 *     specific), until at most one is left; if none is left, the call is ambiguous.</li>
+	 * </ul>
+	 * Read from the code, not run: a more specific candidate that does not fit the call still
+	 * drops one that does (with {@code f(Object)} and {@code f(String)}, a call with an
+	 * {@code Integer} is ambiguous); a {@code null} argument fits no parameter, since the type of the
+	 * literal ({@code new JType("null")}) is not {@code isNull()} and has an empty type name, so a
+	 * call with {@code null} resolves only when name and arity leave a single candidate; and a round
+	 * that drops nothing (two candidates that fit and neither more specific) repeats forever.
+	 *
+	 * <p>The calls are taken in identity-hash order, so which error is reported first is not fixed.
+	 *
+	 * @throws JDynAlloySemanticException on the first call that cannot be resolved: "Binding
+	 *         error. Module doesn't have program" (no compatible module declares any program),
+	 *         "Program not found" (none of that name), "Program overload not found" (none with
+	 *         that number of arguments), or "Binding error. Ambiguous call". Its
+	 *         {@code stopOnFirstBindingError} is always true, so {@link JDynAlloyBindingException}
+	 *         does not come out of here.
+	 */
 	public void resolveBinding() {
 		//redundant error check to avoid continue on error
 		boolean hasError = false;

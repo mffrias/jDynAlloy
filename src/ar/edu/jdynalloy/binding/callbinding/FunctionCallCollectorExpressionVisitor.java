@@ -8,6 +8,15 @@ import ar.uba.dc.rfm.alloy.ast.expressions.AlloyExpression;
 import ar.uba.dc.rfm.alloy.ast.expressions.ExprFunction;
 import ar.uba.dc.rfm.alloy.ast.expressions.ExpressionVisitor;
 
+/**
+ * The expression visitor of {@link PredicateAndFunctionCallCollectorVisitor}: records every
+ * function call ({@code ExprFunction}) it reaches, with its argument and return types, in
+ * {@link #getFunctionsCollected()}. A call nested in another's arguments is recorded twice (once
+ * while the outer call's arguments are typed, once by the traversal). Its {@code formulaVisitor}
+ * must be a {@code PredicateAndFunctionCallCollectorVisitor}, whose symbol table it uses to type
+ * the arguments; that visitor's constructor sets it. Typing a call can throw
+ * {@code JDynAlloyNotImplementedYetException} (see {@link ExpressionTypeResolver}).
+ */
 public class FunctionCallCollectorExpressionVisitor extends ExpressionVisitor {
 	
 	

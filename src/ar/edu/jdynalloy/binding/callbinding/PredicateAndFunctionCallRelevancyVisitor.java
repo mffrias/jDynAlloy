@@ -39,6 +39,15 @@ import ar.uba.dc.rfm.alloy.ast.formulas.PredicateCallAlloyFormula;
 import ar.uba.dc.rfm.alloy.ast.formulas.PredicateFormula;
 import ar.uba.dc.rfm.alloy.ast.formulas.QuantifiedFormula;
 
+/**
+ * The formula visitor of the relevancy analysis ({@code RelevancyAnalysisUtils.analyzeFormula}
+ * and {@code analyzeObjectInvariant}): collects the {@code callSpec}/{@code staticCallSpec}
+ * formulas, with their argument types, and the function calls that its expression visitor
+ * records. That expression visitor must be a {@code RelevantAnalysisExpressionTypeResolver}, set
+ * with {@code setExpressionVisitor} after construction: the constructor installs a plain
+ * {@code ExpressionVisitor}, and {@link #visit(PredicateFormula)} casts it. It is in this
+ * package, but only the relevancy analysis uses it.
+ */
 public class PredicateAndFunctionCallRelevancyVisitor extends JFormulaVisitor {
 
 	private SymbolTable symbolTable;
@@ -50,16 +59,36 @@ public class PredicateAndFunctionCallRelevancyVisitor extends JFormulaVisitor {
 		return symbolTable;
 	}
 
+	/**
+	 * Returns the call specs found so far, in the order visited.
+	 *
+	 * @return the list itself
+	 */
 	public List<PredicateCallAlloyFormulaDescriptor> getPredicatesCollected() {
 		return predicatesCollected;
 	}
 
 
+	/**
+	 * Returns the function calls collected so far. They are added at each predicate formula
+	 * ({@code PredicateFormula}): every call the expression visitor has recorded until then, again,
+	 * so a call can appear more than once, and a call after the last predicate formula, or in a
+	 * formula without one, not at all.
+	 *
+	 * @return the list itself
+	 */
 	public List<FunctionCallAlloyFormulaDescriptor>  getCalledFunctions(){
 		return this.functionsCollected;
 	}
 
 
+	/**
+	 * Creates a visitor; replace its expression visitor with a
+	 * {@code RelevantAnalysisExpressionTypeResolver} before visiting (see the class comment).
+	 *
+	 * @param symbolTable the analysis's table: the fields and the variables in scope; quantified
+	 *        variables are added and removed while their formula is visited
+	 */
 	public PredicateAndFunctionCallRelevancyVisitor(SymbolTable symbolTable) {
 		// DOB::I need put some ExpressionVisitor there, but I will does not
 		// use it.
@@ -80,6 +109,15 @@ public class PredicateAndFunctionCallRelevancyVisitor extends JFormulaVisitor {
 	//		return varCollector.setFormulaVisitor(instance);
 	//	}
 
+	/**
+	 * Visits the arguments, then appends the function calls the expression visitor has recorded so
+	 * far to {@link #getCalledFunctions()}.
+	 *
+	 * @param n the predicate formula
+	 * @return a vector with the base visitor's result
+	 * @throws ClassCastException if the expression visitor is not a
+	 *         {@code RelevantAnalysisExpressionTypeResolver}
+	 */
 	@Override
 	public Object visit(PredicateFormula n) {
 		Vector<Object> result = new Vector<Object>();
@@ -107,6 +145,14 @@ public class PredicateAndFunctionCallRelevancyVisitor extends JFormulaVisitor {
 		return super.visit(predicateCallAlloyFormula);
 	}
 
+	/**
+	 * Declares the quantified variables in a new scope of the symbol table, each typed by its bound,
+	 * visits the quantified formula, and closes the scope.
+	 *
+	 * @param node the quantified formula
+	 * @return the base visitor's results
+	 * @throws JDynAlloyException if a bound is not a signature name or the union of two
+	 */
 	@Override
 	public Object visit(QuantifiedFormula node) {
 		this.symbolTable.beginScope();

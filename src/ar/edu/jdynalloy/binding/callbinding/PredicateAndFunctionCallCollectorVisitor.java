@@ -38,6 +38,14 @@ import ar.uba.dc.rfm.alloy.ast.formulas.PredicateCallAlloyFormula;
 import ar.uba.dc.rfm.alloy.ast.formulas.PredicateFormula;
 import ar.uba.dc.rfm.alloy.ast.formulas.QuantifiedFormula;
 
+/**
+ * The formula visitor that {@link SemanticCheckVisitor} runs on each specification formula: it
+ * collects the {@code callSpec}/{@code staticCallSpec} formulas, with their argument types, in
+ * {@link #getPredicatesCollected()}, and, through its
+ * {@link FunctionCallCollectorExpressionVisitor}, the function calls in
+ * {@link #getCalledFunctions()}, which {@code SemanticCheckVisitor} does not read (that use is
+ * commented out). One instance per formula.
+ */
 public class PredicateAndFunctionCallCollectorVisitor extends JFormulaVisitor {
 
 	private SymbolTable symbolTable;
@@ -49,16 +57,35 @@ public class PredicateAndFunctionCallCollectorVisitor extends JFormulaVisitor {
 		return symbolTable;
 	}
 
+	/**
+	 * Returns the call specs found so far, in the order visited.
+	 *
+	 * @return the list itself
+	 */
 	public List<PredicateCallAlloyFormulaDescriptor> getPredicatesCollected() {
 		return predicatesCollected;
 	}
 
 
+	/**
+	 * Returns the function calls collected so far. They are added at each predicate formula
+	 * ({@code PredicateFormula}): every call the expression visitor has recorded until then, again,
+	 * so a call can appear more than once, and a call after the last predicate formula not at all.
+	 *
+	 * @return the list itself
+	 */
 	public List<FunctionCallAlloyFormulaDescriptor>  getCalledFunctions(){
 		return this.functionsCollected;
 	}
 
 
+	/**
+	 * Creates a visitor with a new {@link FunctionCallCollectorExpressionVisitor} as expression
+	 * visitor.
+	 *
+	 * @param symbolTable the table to type arguments with: the fields and the variables in scope;
+	 *        quantified variables are added and removed while their formula is visited
+	 */
 	public PredicateAndFunctionCallCollectorVisitor(SymbolTable symbolTable) {
 		// DOB::I need put some ExpressionVisitor there, but I will does not
 		// use it.
@@ -106,6 +133,14 @@ public class PredicateAndFunctionCallCollectorVisitor extends JFormulaVisitor {
 		return super.visit(predicateCallAlloyFormula);
 	}
 
+	/**
+	 * Declares the quantified variables in a new scope of the symbol table, each typed by its bound,
+	 * visits the quantified formula, and closes the scope.
+	 *
+	 * @param node the quantified formula
+	 * @return the base visitor's results
+	 * @throws JDynAlloyException if a bound is not a signature name or the union of two
+	 */
 	@Override
 	public Object visit(QuantifiedFormula node) {
 		this.symbolTable.beginScope();

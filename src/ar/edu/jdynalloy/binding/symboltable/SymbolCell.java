@@ -22,6 +22,11 @@ package ar.edu.jdynalloy.binding.symboltable;
 import ar.edu.jdynalloy.xlator.JType;
 import ar.uba.dc.rfm.alloy.VariableId;
 
+/**
+ * A declared variable and its type, as {@link SymbolTable#lookup(VariableId)} returns it;
+ * {@code ExpressionTypeResolver} reads the type. Equality and hash code use the variable id
+ * only, not the type.
+ */
 public class SymbolCell {
 	
 	private VariableId variableId;

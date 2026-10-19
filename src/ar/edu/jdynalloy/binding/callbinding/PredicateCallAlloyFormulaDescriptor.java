@@ -24,6 +24,13 @@ import java.util.List;
 import ar.edu.jdynalloy.xlator.JType;
 import ar.uba.dc.rfm.alloy.ast.formulas.PredicateCallAlloyFormula;
 
+/**
+ * A {@code callSpec}/{@code staticCallSpec} formula ({@code PredicateCallAlloyFormula}) found in
+ * a formula, with the types of its arguments. Built by the call collectors:
+ * {@link PredicateAndFunctionCallCollectorVisitor} for the bindings, whose
+ * {@link SemanticCheckVisitor} turns it into a {@code JBindingKey}, and
+ * {@link PredicateAndFunctionCallRelevancyVisitor} for the relevancy analysis.
+ */
 public class PredicateCallAlloyFormulaDescriptor {
 	private PredicateCallAlloyFormula predicateCallAlloyFormula;
 	private List<JType> argumentsTypes;

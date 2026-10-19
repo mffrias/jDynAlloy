@@ -20,6 +20,12 @@
 package ar.edu.jdynalloy.binding.callbinding;
 
 
+/**
+ * An unchecked exception for a call that cannot be bound. {@link CallBindingResolver} throws it,
+ * and collects its messages, only when its {@code stopOnFirstBindingError} is false; that field
+ * is private, true and never changed, so this exception is never thrown, and binding errors are
+ * {@code JDynAlloySemanticException}s instead.
+ */
 public class JDynAlloyBindingException extends RuntimeException {
 
 	public JDynAlloyBindingException() {

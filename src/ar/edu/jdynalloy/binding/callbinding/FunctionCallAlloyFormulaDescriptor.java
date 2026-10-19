@@ -25,6 +25,13 @@ import ar.edu.jdynalloy.xlator.JType;
 import ar.uba.dc.rfm.alloy.ast.expressions.ExprFunction;
 import ar.uba.dc.rfm.alloy.ast.formulas.PredicateCallAlloyFormula;
 
+/**
+ * A function call ({@code ExprFunction}) found in a formula, with the types of its arguments and
+ * of its result. Built by {@link FunctionCallCollectorExpressionVisitor} for the bindings, where
+ * nothing reads it, and by {@code RelevantAnalysisExpressionTypeResolver} for the relevancy
+ * analysis, which looks the call up as a program. It has no {@code equals}: two descriptors are
+ * equal only if they are the same object.
+ */
 public class FunctionCallAlloyFormulaDescriptor {
 	
 	private ExprFunction functionCallInAlloyFormulaInfo;

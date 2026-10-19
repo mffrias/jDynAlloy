@@ -21,6 +21,11 @@ package ar.edu.jdynalloy.binding.callbinding;
 
 import ar.edu.jdynalloy.ast.JDynAlloyVisitor;
 
+/**
+ * An empty {@code JDynAlloyVisitor}: it overrides nothing, and nothing in jDynAlloy or TACO
+ * creates it. The implementors of {@code virtual} programs are searched by
+ * {@link ar.edu.jdynalloy.binding.SearchImplementors} instead.
+ */
 public class CollectImplementorsVisitor extends JDynAlloyVisitor{
 
 	public CollectImplementorsVisitor(boolean isJavaArithmetic) {

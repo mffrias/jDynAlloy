@@ -20,6 +20,16 @@
 package ar.edu.jdynalloy.binding.symboltable;
 
 
+/**
+ * A field as the key of {@link SymbolTable}'s fields: the id of the module that declares it and
+ * the field's name ({@code <class>_<field>}, docs/NAMING.md). Equal when both are equal;
+ * {@code toString()} is {@code <module>.<field>}.
+ *
+ * <p>Despite their names, {@code getType()}, {@code setType(String)} and the constructor's
+ * {@code type} parameter are the module id, not a type. TACO's {@code JDynAlloyParsingStage}
+ * reads the field names of {@link SymbolTable#getFieldSet()}, and
+ * {@code modifies/ReplaceModifiesModuleVisitor} reads both parts.
+ */
 public class FieldDescriptor {
     private String moduleName;
     private String fieldName;
@@ -51,6 +61,12 @@ public class FieldDescriptor {
     public FieldDescriptor() {
 	
     }
+    /**
+     * Creates the descriptor of a field.
+     *
+     * @param type the id of the module that declares the field (not a type)
+     * @param fieldName the field's name
+     */
     public FieldDescriptor(String type,String fieldName) {
 	super();
 	this.moduleName = type;

@@ -62,6 +62,28 @@ import ar.uba.dc.rfm.alloy.ast.expressions.ExprFunction;
 import ar.uba.dc.rfm.alloy.ast.formulas.IProgramCall;
 import ar.uba.dc.rfm.alloy.ast.formulas.JFormulaVisitor;
 
+/**
+ * The visitor of {@link ar.edu.jdynalloy.binding.BindingManager#execute()} that keys every call.
+ * For each {@code call} statement ({@link JProgramCall}) in a program body, and each
+ * {@code callSpec}/{@code staticCallSpec} formula ({@code PredicateCallAlloyFormula}) in
+ * {@code assume} conditions, loop invariants, object and class invariants and constraints,
+ * {@code represents}, {@code requires} and {@code ensures}, it types the arguments with an
+ * {@link ExpressionTypeResolver} and records a {@link JBindingKey} in
+ * {@link #getCallBindings()}: no module id for a static call, otherwise the type of the first
+ * argument (the receiver). The conditions of {@code assert}, {@code if} and {@code while}, and
+ * assignments, are not searched. {@link CallBindingResolver} then resolves the keys.
+ *
+ * <p>It keeps its {@link SymbolTable} in step with the AST: a scope per module (with
+ * {@code thiz} of the module's type), per program (its parameters) and per block (its variable
+ * declarations); call specs inside quantifiers get a scope from
+ * {@link PredicateAndFunctionCallCollectorVisitor}. The fields must already be in the table
+ * ({@code FieldCollectorVisitor} runs first). The visits return the children's results, as
+ * {@code JDynAlloyVisitor}'s do, which {@code BindingManager} ignores; {@code visit(JAlloyCondition)}
+ * and {@code visit(JAssertionDeclaration)} throw, as the base class's do.
+ *
+ * <p>Its own {@code javaArithmetic} flag ({@code getJavaArithmetic}/{@code setJavaArithmetic}) is
+ * read by nothing; the base class's {@code isJavaArithmetic} is a separate field.
+ */
 public class SemanticCheckVisitor extends JDynAlloyVisitor {
 
 	private SymbolTable symbolTable;
@@ -78,6 +100,11 @@ public class SemanticCheckVisitor extends JDynAlloyVisitor {
 		this.javaArithmetic = b;
 	}
 
+	/**
+	 * Returns the keys of the calls visited so far.
+	 *
+	 * @return the identity map from calls to their keys (the map itself)
+	 */
 	public IdentityHashMap<IProgramCall, JBindingKey> getCallBindings() {
 		return callBindings;
 	}
@@ -94,12 +121,26 @@ public class SemanticCheckVisitor extends JDynAlloyVisitor {
 		this.symbolTable = symbolTable;
 	}
 
+	/**
+	 * Creates a visitor that types expressions with the given table.
+	 *
+	 * @param symbolTable the table, which must already hold the fields of every module (filled by
+	 *        {@code FieldCollectorVisitor}); the visitor opens and closes scopes in it
+	 * @param isJavaArithmetic passed to {@code JDynAlloyVisitor}
+	 */
 	public SemanticCheckVisitor(SymbolTable symbolTable, boolean isJavaArithmetic) {
 		super(isJavaArithmetic);		
 		this.symbolTable = symbolTable;
 		this.callBindings = new IdentityHashMap<IProgramCall, JBindingKey>();
 	}
 
+	/**
+	 * Creates a visitor with a new, empty symbol table, so without fields. The table's
+	 * {@code javaArithmetic} is set from this visitor's own flag, still false here, not from the
+	 * parameter. Unused.
+	 *
+	 * @param isJavaArithmetic passed to {@code JDynAlloyVisitor}
+	 */
 	public SemanticCheckVisitor(boolean isJavaArithmetic) {
 		super(isJavaArithmetic);
 		this.symbolTable = new SymbolTable();
@@ -107,6 +148,14 @@ public class SemanticCheckVisitor extends JDynAlloyVisitor {
 		this.callBindings = new IdentityHashMap<IProgramCall, JBindingKey>();
 	}
 
+	/**
+	 * Opens a scope with {@code thiz} of the module's type, visits the module as
+	 * {@code JDynAlloyVisitor} does (fields, invariants, constraints, {@code represents},
+	 * programs), and closes the scope.
+	 *
+	 * @param node the module
+	 * @return the base visitor's {@code JDynAlloyModuleVisitResult}
+	 */
 	@Override
 	public Object visit(JDynAlloyModule node) {
 		Object returnValue;
@@ -343,6 +392,15 @@ public class SemanticCheckVisitor extends JDynAlloyVisitor {
 		return super.visit(node);
 	}
 
+	/**
+	 * Types each argument with a new {@link ExpressionTypeResolver} over the symbol table, and
+	 * records the call's key (see the class comment).
+	 *
+	 * @param programCall the call
+	 * @return null
+	 * @throws ar.edu.jdynalloy.JDynAlloySemanticException if an argument uses an undeclared
+	 *         variable or an unknown field
+	 */
 	@Override
 	public Object visit(JProgramCall programCall) {
 		Object returnValue = super.visit(programCall);
@@ -401,6 +459,15 @@ public class SemanticCheckVisitor extends JDynAlloyVisitor {
 		return returnValue;
 	}
 
+	/**
+	 * Declares the program's parameters in a new scope (for an instance program, all but the first,
+	 * {@code thiz}, which the module's scope has), visits the specification cases and the body, and
+	 * closes the scope. Unlike {@code JDynAlloyVisitor}'s, it does not set {@code specFromMethod}.
+	 *
+	 * @param node the program
+	 * @return a vector with the parameters', specification cases' and body's results
+	 * @throws ar.edu.jdynalloy.JDynAlloySemanticException if a parameter is already declared
+	 */
 	@Override
 	public Object visit(JProgramDeclaration node) {
 		isClassLevel = false;
@@ -470,6 +537,14 @@ public class SemanticCheckVisitor extends JDynAlloyVisitor {
 		return super.visit(n);
 	}
 
+	/**
+	 * Declares the variable in the innermost scope.
+	 *
+	 * @param variableDeclaration the declaration
+	 * @return null
+	 * @throws ar.edu.jdynalloy.JDynAlloySemanticException if the name is declared in any open
+	 *         scope ("Duplicate variable")
+	 */
 	@Override
 	public Object visit(JVariableDeclaration variableDeclaration) {
 		Object returnValue;
