@@ -21,6 +21,38 @@ import ar.uba.dc.rfm.alloy.ast.expressions.AlloyExpression;
 import ar.uba.dc.rfm.alloy.ast.expressions.ExprVariable;
 import ar.uba.dc.rfm.alloy.ast.formulas.PredicateFormula;
 
+/**
+ * Names every program and every call after the program it is bound to, and builds the bodies of
+ * {@code virtual} programs: the first preparation step of
+ * {@code JDynAlloyTranslator.translateAll}, which runs one instance on every module, in order
+ * (docs/ARCHITECTURE.md, "The translation", step 1). It returns new modules; the input is not
+ * changed.
+ *
+ * <ul>
+ * <li>A program is rebuilt with its name (see below), no signature id (null), not virtual, and
+ *     its other parts; a virtual one gets a dispatcher as its body: for each implementor in the
+ *     binding, {@code if classOf(thiz) = <Sig>Class then call <implementor>[parameters]}.
+ *     Dynamic dispatch does not work: the binding has no implementors, so building the
+ *     dispatcher fails (docs/KNOWN-LIMITATIONS.md, "Analysis").</li>
+ * <li>A call is renamed after the program the binding resolves it to, and loses its
+ *     {@code super} flag. This is what makes the names of calls equal those of the
+ *     declarations for the later passes, which compare names: TACO names a call to a static
+ *     program of a built-in module {@code <signature>_<program>}, while the program is declared
+ *     with its bare name (docs/NAMING.md).</li>
+ * </ul>
+ * A program's name is its program id, except that a program seen after another one with the same
+ * id gets {@code <id>_0} if it is pure and none of its parameter types mentions
+ * {@code java_lang_Throwable}. Seen means visited or reached through a call, so which overload
+ * keeps the bare name depends on that order. Every program TACO builds, and those of its
+ * {@code .djals} models, have the parameter {@code throw: java_lang_Throwable+null}
+ * (docs/LANGUAGE.md), so in practice no program gets {@code _0}. Unclear: whether the
+ * {@code _0} is still meant to apply to any program (docs/NAMING.md, "What it names").
+ *
+ * <p>Assumes that {@code binding} was built on these very modules: the names are kept by
+ * identity of the declarations, and every call must resolve (otherwise a
+ * {@code NullPointerException}). The names live in this instance, which serves one translation;
+ * no static state.
+ */
 class VAlloyVisitor extends JDynAlloyMutator {
 
 	public VAlloyVisitor(JDynAlloyBinding binding, boolean isJavaArith) {

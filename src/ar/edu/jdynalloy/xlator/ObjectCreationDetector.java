@@ -14,6 +14,18 @@ import ar.uba.dc.rfm.dynalloy.util.DfsProgramVisitor;
 
 import java.util.LinkedList;
 
+/**
+ * Tells whether a translated DynAlloy program allocates objects: after a visit,
+ * {@link #getGetUnusedObject_was_found()} is true if it met the action {@code getUnusedObject},
+ * the translation of {@code createObject}. Only the program itself is searched: calls are not
+ * followed (the override that would have inlined them is commented out), and the program id and
+ * visitor given to the constructor are not used. {@code JDynAlloyXlatorVisitor.visit} of a
+ * program runs it on the translated body, but then sets its own {@code hasObjectCreation} to
+ * true just before the test that guards the constraint on {@code usedObjects} in the
+ * precondition, so that constraint is always added and the result has no effect. Unclear:
+ * whether the constraint was meant to depend on the detection. The flag is never reset. No
+ * static state.
+ */
 public class ObjectCreationDetector extends DfsProgramVisitor {
 
 	private static final String GET_UNUSED_OBJECT = "getUnusedObject";

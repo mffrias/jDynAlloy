@@ -21,6 +21,59 @@ import ar.uba.dc.rfm.alloy.ast.expressions.ExprConstant;
 import ar.uba.dc.rfm.alloy.ast.expressions.ExprUnion;
 import ar.uba.dc.rfm.dynalloy.visualization.utils.StringUtils;
 
+/**
+ * The type of a JDynAlloy variable, field or expression: a signature or a union of signatures,
+ * a set, a sequence, a binary relation (the type of a field), or a special type. TACO builds
+ * types with {@link #parse(String)}, the constructors and {@code JTypeFactory}; the parser of
+ * {@code .djals} files parses every type it reads with {@link #parse(String)}; the bindings and
+ * symbol tables compare them ({@link #equals(Object)}); and the translation prints them
+ * ({@link #toString()}), as the types of the variables of the DynAlloy output
+ * ({@code JDynAlloyTyping.put}). See docs/LANGUAGE.md for where types appear.
+ *
+ * <p>Representation. A type has a domain and an image, lists of signature ids (sorted when the
+ * type is built from sets), and flags:
+ * <ul>
+ * <li>a signature or a union {@code A+B}: the domain, no image;</li>
+ * <li>a set {@code set A}: the domain, with the set flag or the left multiplier {@code set};</li>
+ * <li>a sequence {@code seq A}: the sequence flag, with its elements as the domain; a relation
+ *     from exactly {@code Int} is built as a sequence of its image;</li>
+ * <li>a binary relation {@code A->B}: domain and image, with the function flag for
+ *     {@code ->one} and for {@code set->lone}, and the two multipliers for the latter; a field
+ *     whose values are sequences ({@code A->seq B}) has the image-is-sequence flag;</li>
+ * <li>a special type ({@link SpecialType}): the static constants, such as
+ *     {@code ALLOCATED_OBJECTS_TYPE} ({@code set java_lang_Object}, the type of
+ *     {@code usedObjects}) and {@code INT_ARRAY_CONTAINS_TYPE}, and the new ones {@code parse}
+ *     builds for {@code java_util_Set->univ} and {@code java_util_List->Int->univ}. The domain
+ *     is the container's signature or empty, and the image is empty, or {@code null} for those
+ *     two.</li>
+ * </ul>
+ * {@link #isTernaryRelation()} is true only for {@code MAP_ENTRIES}: the private constructor
+ * that would build other ternary types is not used.
+ *
+ * <p>Printing ({@link #toString()}): {@code A+B} for a union, in the domain's order,
+ * {@code set(A)}, {@code seq(A)}, {@code (A)->(B)}, {@code (A)->one(B)},
+ * {@code (A) set -> lone (B)}, {@code (A)->(seq(B))}, and a fixed text for each special type.
+ * Not all of them parse back (see {@link #parse(String)}).
+ *
+ * <p>Equality ({@link #equals(Object)} and {@code hashCode}) compares the domain and the image
+ * as lists, the function and sequence flags and the special type; not the set flag, the
+ * multipliers or the image-is-sequence flag. So {@code set A} equals {@code A}, and
+ * {@code A set->lone B} equals {@code A->one B}. The lists are compared in order: the
+ * constructors that take sets sort them, the one that takes lists does not.
+ *
+ * <p>Configuration. {@code parse}, {@code dpdTypeNameExtract}, {@code to} when the image is
+ * empty, and {@code toString} and {@code used_types} of special types read
+ * {@code JDynAlloyConfig.getInstance()}
+ * ({@code useQualifiedNamesForJTypes}, for the {@code java_lang_} and {@code java_util_}
+ * prefixes of some special types; {@code JMLObjectSequenceToAlloySequence}), so they throw an
+ * {@code IllegalStateException} before the configuration is set. {@code JSignatureFactory}
+ * parses its type constants when it is initialised, and this class's initialisation triggers
+ * that ({@code NULL_VALUE_SIGNATURE_ID}), so neither class can be initialised before the
+ * configuration.
+ *
+ * <p>Static state: the constants, built once per JVM and shared by every analysis. Types are
+ * mutable ({@link #setAsNonNull()}); nothing resets the constants.
+ */
 public final class JType {
 
 	private List<String> dom;
@@ -59,6 +112,18 @@ public final class JType {
 //		}
 //	}
 
+	/**
+	 * The special types: relations of the built-in modules that a domain and an image cannot
+	 * describe. {@code ALLOCATED_OBJECT} is {@code set java_lang_Object}, the type of
+	 * {@code usedObjects}; {@code SYSTEM_ARRAY} is {@code java_lang_SystemArray->(seq univ)};
+	 * {@code SET_CONTAINS}, {@code MAP_ENTRIES}, {@code ALLOY_LIST_CONTAINS},
+	 * {@code JML_OBJECTSET_CONTAINS}, {@code JML_OBJECTSEQUENCE_CONTAINS} and
+	 * {@code ITERATOR_CONTAINS} hold the contents of sets, maps, lists, JML sets and sequences and
+	 * iterators; {@code OBJECT_ARRAY_CONTAINS}, {@code INT_ARRAY_CONTAINS},
+	 * {@code LONG_ARRAY_CONTAINS} and {@code CHAR_ARRAY_CONTAINS} the contents of arrays, indexed by
+	 * {@code JavaPrimitiveIntegerValue}, and the two {@code ALLOY_*_ARRAY_CONTAINS} those indexed by
+	 * {@code Int}; {@code UNIV_TO_UNIV} is {@code univ->univ}.
+	 */
 	public enum SpecialType {
 		ALLOCATED_OBJECT, SYSTEM_ARRAY, SET_CONTAINS, MAP_ENTRIES, ALLOY_LIST_CONTAINS, JML_OBJECTSET_CONTAINS, JML_OBJECTSEQUENCE_CONTAINS, 
 		ITERATOR_CONTAINS, UNIV_TO_UNIV, OBJECT_ARRAY_CONTAINS, INT_ARRAY_CONTAINS, LONG_ARRAY_CONTAINS, ALLOY_OBJECT_ARRAY_CONTAINS, ALLOY_INT_ARRAY_CONTAINS, CHAR_ARRAY_CONTAINS
@@ -113,6 +178,49 @@ public final class JType {
 	public static final JType CHAR_ARRAY_CONTAINS_TYPE = new JType(
 			SpecialType.CHAR_ARRAY_CONTAINS, "java_lang_CharArray");
 
+	/**
+	 * Parses a type as written in {@code .djals} files and by TACO. All parentheses are removed
+	 * first, and {@code "set -> lone"}, {@code "-> one"} and {@code "-> seq"} lose their spaces;
+	 * then the first rule that applies, in this order:
+	 * <ol>
+	 * <li>{@code A set->lone B}, with no other arrow: a function with those multipliers; neither
+	 *     side is split at {@code +};</li>
+	 * <li>{@code none->none}: {@code UNIV_TO_UNIV}, which prints as {@code univ->univ};</li>
+	 * <li>anything that starts with {@code seq}: a sequence of the signatures of the rest, parsed;
+	 *     so a signature whose name starts with {@code seq} is taken for a sequence;</li>
+	 * <li>exact texts, spaces included, for the special types: the contents of object, int, char
+	 *     and long arrays indexed by {@code JavaPrimitiveIntegerValue}, and of object and int arrays
+	 *     indexed by {@code Int} (such as {@code java_lang_IntArray->(Int set->lone Int)});
+	 *     {@code set java_lang_Object}; {@code java_lang_SystemArray->seq univ};
+	 *     {@code java_util_Set->univ};
+	 *     {@code java_util_Map->java_lang_Object set->lone java_lang_Object+null};
+	 *     {@code java_util_List->Int->univ}; {@code org_jmlspecs_models_JMLObjectSet->set univ};
+	 *     and {@code java_util_Iterator->univ}. The text for {@code JML_OBJECTSEQUENCE_CONTAINS}
+	 *     has parentheses, so it never matches;</li>
+	 * <li>{@code set A}: a set of {@code A}, not split at {@code +};</li>
+	 * <li>{@code A->oneB}, that is {@code (A)->one(B)}: a function; both sides are split at
+	 *     {@code +};</li>
+	 * <li>{@code A->seqB}: a field of {@code A} whose values are sequences of {@code B}
+	 *     ({@code JTypeFactory.buildFieldSeq}); {@code A} must be one signature (an
+	 *     {@code assert});</li>
+	 * <li>{@code A->B}: a relation that is not a function; both sides are split at {@code +}, and
+	 *     whatever follows a second arrow is dropped;</li>
+	 * <li>otherwise a signature, or a union split at {@code +}.</li>
+	 * </ol>
+	 * In rules 1, 6 and 8, a domain of exactly {@code Int} gives a sequence of the image instead.
+	 * In rule 4, the {@code java_lang_} of {@code java_lang_Object} and
+	 * {@code java_lang_SystemArray} and the {@code java_util_} prefixes depend on
+	 * {@code useQualifiedNamesForJTypes} (TACO's is true); those of the arrays are fixed.
+	 *
+	 * <p>What {@link #toString()} prints does not always parse back: {@code set(A)} becomes the
+	 * signature {@code setA}, and most special types print a text that matches no rule 4 text and
+	 * falls to rule 8.
+	 *
+	 * @param source the type
+	 * @return the type; for most rule 4 texts, the shared constant
+	 * @throws IllegalStateException if {@code JDynAlloyConfig} is not set, for any text that rules
+	 *         1 to 3 and the first text of rule 4 do not take
+	 */
 	public static JType parse(String source) {
 //		if (source.contains("Classfields")){
 //			System.out.println("HERE");
@@ -238,10 +346,20 @@ public final class JType {
 
 
 
+	/**
+	 * Creates the type of one signature.
+	 *
+	 * @param signatureId the signature id
+	 */
 	public JType(String signatureId) {
 		this(Collections.<String> singleton(signatureId));
 	}
 
+	/**
+	 * Creates a signature or a union of signatures; the signatures are sorted.
+	 *
+	 * @param signatures the signature ids
+	 */
 	public JType(Set<String> signatures) {
 		super();
 		dom = sortList(signatures);
@@ -252,6 +370,13 @@ public final class JType {
 	}
 
 
+	/**
+	 * Creates a function from one signature to another, as {@link #JType(Set, Set)} does (a
+	 * sequence if {@code from} is {@code Int}).
+	 *
+	 * @param from the domain's signature id
+	 * @param to the image's signature id
+	 */
 	public JType(String from, String to) {
 		this(Collections.<String> singleton(from), Collections
 				.<String> singleton(to));
@@ -265,6 +390,13 @@ public final class JType {
 	}
 
 
+	/**
+	 * Creates a union of signatures, or a set of them if {@code isSet}. The set is marked by the
+	 * left multiplier, not by the set flag; it prints as {@code set(A+B)}.
+	 *
+	 * @param isSet true for a set
+	 * @param domain the signature ids; they are sorted
+	 */
 	public JType(boolean isSet, Set<String> domain) {
 		this(domain);
 		if (isSet)
@@ -275,6 +407,14 @@ public final class JType {
 		right_arrow_multiplier = null;
 	}
 
+	/**
+	 * Creates a function from the union {@code from} to the union {@code to}, printed
+	 * {@code (A)->one(B)}; if {@code from} is exactly {@code {Int}}, a sequence of {@code to}
+	 * instead. Both are sorted.
+	 *
+	 * @param from the domain's signature ids
+	 * @param to the image's signature ids
+	 */
 	public JType(Set<String> from, Set<String> to) {
 		//		super();
 		if ((from.size() == 1) && (from.contains(INT_SIGNATURE_ID))) {
@@ -291,6 +431,19 @@ public final class JType {
 		specialType = null;
 	}
 
+	/**
+	 * Creates a type from its parts, as they are: the lists are neither copied nor sorted (equality
+	 * then depends on their order), and there are no multipliers. {@code JTypeFactory.buildFieldSeq}
+	 * uses it for fields whose values are sequences.
+	 *
+	 * @param dom the domain
+	 * @param img the image
+	 * @param imageIsSequence true for a field whose values are sequences
+	 * @param isFunction the function flag
+	 * @param isSequence the sequence flag
+	 * @param isSet the set flag
+	 * @param specialType the special type, or null
+	 */
 	public JType(List<String> dom, List<String> img, boolean imageIsSequence,
 			boolean isFunction, boolean isSequence, boolean isSet,
 			SpecialType specialType) {
@@ -346,6 +499,13 @@ public final class JType {
 	}
 
 
+	/**
+	 * Creates a special type whose domain is the container's signature, with no image; the
+	 * constants for the contents of arrays are built so.
+	 *
+	 * @param specialType the special type
+	 * @param singletonFrom the container's signature id
+	 */
 	public JType(SpecialType specialType, String singletonFrom) {
 		this.specialType = specialType;
 		this.dom = new ArrayList<String>();
@@ -365,6 +525,13 @@ public final class JType {
 		return this.specialType;
 	}
 
+	/**
+	 * Tells whether this is a relation: true when the image is not empty, and for every special type
+	 * but {@code MAP_ENTRIES}, including {@code ALLOCATED_OBJECT} (a set), {@code UNIV_TO_UNIV} and
+	 * the contents of arrays (ternary). False for a sequence.
+	 *
+	 * @return true for a relation
+	 */
 	public boolean isBinaryRelation() {
 		return ((this.img!=null && this.img.size() > 0) || (this.specialType != null && !specialType.equals(SpecialType.MAP_ENTRIES)));
 	}
@@ -375,10 +542,25 @@ public final class JType {
 				|| (ternary_type != null);
 	}
 
+	/**
+	 * Returns the domain, as a new set: the signatures of a signature, union or set, the elements of
+	 * a sequence, the left side of a relation, the container of a special type (none for the
+	 * constants other than those of arrays).
+	 *
+	 * @return the signature ids
+	 */
 	public Set<String> from() {
 		return new HashSet<String>(dom);
 	}
 
+	/**
+	 * Returns the image, as a new set. When the image is empty, the test for the exception parses
+	 * a type, so it reads the configuration.
+	 *
+	 * @return the signature ids; empty for {@code ALLOY_INT_ARRAY_CONTAINS_TYPE}
+	 * @throws IllegalStateException if the image is empty ("Cannot ask for image when type ... is
+	 *         not a relation."), except for {@code ALLOY_INT_ARRAY_CONTAINS_TYPE}
+	 */
 	public Set<String> to() {
 		if (img.isEmpty() && !this.equals(JType.parse("java_lang_IntArray->(Int set->lone Int)")))
 			throw new IllegalStateException("Cannot ask for image when type "
@@ -388,6 +570,13 @@ public final class JType {
 		return toSignatures;
 	}
 
+	/**
+	 * Returns a signature of the domain other than {@code null}: the first one {@link #from()}
+	 * yields, a {@code HashSet}, so with several the choice is arbitrary.
+	 *
+	 * @return the signature id, or {@code "null"} if that is the whole domain
+	 * @throws java.util.NoSuchElementException if the domain is empty
+	 */
 	public String singletonFrom() {
 		for (String elem : from()) {
 			if (!elem.equals(NULL_VALUE_SIGNATURE_ID)) {
@@ -397,6 +586,13 @@ public final class JType {
 		return from().iterator().next();
 	}
 
+	/**
+	 * Returns a signature of the image other than {@code null}, as {@link #singletonFrom()} does for
+	 * the domain: for a field, the type of its values.
+	 *
+	 * @return the signature id, or {@code "null"} if that is the whole image
+	 * @throws IllegalStateException if the image is empty (see {@link #to()})
+	 */
 	public String singletonTo() {
 		for (String elem : to()) {
 			if (!elem.equals(NULL_VALUE_SIGNATURE_ID)) {
@@ -406,6 +602,14 @@ public final class JType {
 		return to().iterator().next();
 	}
 
+	/**
+	 * Tells whether this is a set: parsed from {@code set A}, or built with
+	 * {@code JType(true, ...)}. Also true for a relation {@code A set->lone B}, whose left
+	 * multiplier is {@code set}; false for {@code ALLOCATED_OBJECTS_TYPE}, which prints as
+	 * {@code set (java_lang_Object)}.
+	 *
+	 * @return true for a set
+	 */
 	public boolean isSet() {
 		return isSet || this.left_arrow_multiplier==Multiplier.SET_MULTIPLIER;
 	}
@@ -414,6 +618,12 @@ public final class JType {
 		return isSequence;
 	}
 
+	/**
+	 * Tells whether this is a relation to sequences: a field whose values are sequences
+	 * ({@code A->seq B}), or {@code SYSTEM_ARRAY}.
+	 *
+	 * @return true for such a relation
+	 */
 	public boolean isBinRelWithSeq() {
 		if (specialType != null
 				&& specialType == SpecialType.SYSTEM_ARRAY)
@@ -426,6 +636,13 @@ public final class JType {
 	}
 
 
+	/**
+	 * Tells whether this holds the contents of a collection: of a JML set or sequence, and also, in
+	 * spite of the name, of a {@code java_util_Set} or {@code java_util_List}
+	 * ({@code SET_CONTAINS}, {@code ALLOY_LIST_CONTAINS}).
+	 *
+	 * @return true for those four special types
+	 */
 	public boolean isJML() {
 		if (specialType != null 
 				&& (specialType == SpecialType.JML_OBJECTSET_CONTAINS
@@ -437,11 +654,28 @@ public final class JType {
 		return false;
 	}
 
+	/**
+	 * Tells whether this is a relation from {@code null} alone: the domain is just {@code null} and
+	 * {@link #isBinaryRelation()} holds. So the type of the literal {@code null}
+	 * ({@code new JType("null")}, a signature) is not {@code isNull()}, although
+	 * {@code CallBindingResolver.isAssignable} calls it to let {@code null} fit every type ("null is
+	 * compatible with everytype").
+	 *
+	 * @return true for a relation from {@code null}
+	 */
 	public boolean isNull() {
 		return this.from().size() == 1 && this.isBinaryRelation()
 				&& this.from().contains(NULL_VALUE_SIGNATURE_ID);
 	}
 
+	/**
+	 * Removes {@code null} and {@code AssertionFailure} from the domain, in place; the image is
+	 * kept. The hash code changes, so a type changed while it is in a hash set or map (or in the
+	 * parameters of a {@code JProgramDeclaration} that is) is no longer found there; and on a shared
+	 * type ({@code JSignatureFactory}'s or this class's constants) the change would last for the
+	 * rest of the JVM. TACO's {@code JmlExpressionVisitor} and {@code ReplaceModifiesModuleVisitor}
+	 * call it.
+	 */
 	public void setAsNonNull() {
 		List<String> newDom = new ArrayList<String>();
 		for (String type : this.dom) {
@@ -454,6 +688,14 @@ public final class JType {
 		this.dom = newDom;
 	}
 
+	/**
+	 * Returns a signature or union as an Alloy expression: one constant, or the union of the
+	 * constants in the domain's order.
+	 *
+	 * @return the expression
+	 * @throws IllegalStateException for a special type, a set, a sequence or a relation
+	 * @throws IllegalArgumentException if the domain is empty
+	 */
 	public AlloyExpression toAlloyExpr() {
 		if (specialType != null) {
 			throw new IllegalStateException(
@@ -488,6 +730,14 @@ public final class JType {
 		}
 	}
 
+	/**
+	 * Returns the signature ids the type mentions: the domain and the image (so {@code null} for
+	 * {@code A+null}, and not {@code Int} for a sequence); for a special type, a fixed set: the
+	 * container and {@code univ}, {@code Int} or the {@code JavaPrimitive*Value} signatures it
+	 * uses, and nothing for {@code UNIV_TO_UNIV}.
+	 *
+	 * @return a new set
+	 */
 	public Set<String> used_types() {
 		Set<String> used_types = new HashSet<String>();
 		if (specialType != null) {
@@ -564,6 +814,24 @@ public final class JType {
 		return used_types;
 	}
 
+	/**
+	 * Returns the signature whose module holds the values of this type; the relevancy analysis, the
+	 * symbol tables and the bindings use it to find the module of a type:
+	 * <ul>
+	 * <li>for a special type, its container ({@code java_lang_IntArray}, {@code java_util_Map},
+	 *     ...);</li>
+	 * <li>with {@code JMLObjectSequenceToAlloySequence}, for a field whose values are sequences,
+	 *     {@code org_jmlspecs_models_JMLObjectSequence};</li>
+	 * <li>for a relation, {@link #singletonTo()};</li>
+	 * <li>otherwise (a signature, union, set or sequence), the domain without {@code null}, joined
+	 *     with {@code +} in {@code HashSet} order: {@code A} for {@code A+null}, {@code A+B} or
+	 *     {@code B+A} for {@code A+B+null}, and the empty string for {@code null}.</li>
+	 * </ul>
+	 *
+	 * @return the signature id
+	 * @throws RuntimeException for {@code ALLOCATED_OBJECT} and {@code UNIV_TO_UNIV}
+	 *         ("DynJML4AlloyNotImplementedYet")
+	 */
 	public String dpdTypeNameExtract() {
 		String s = null;
 		if (specialType != null) {
@@ -647,6 +915,14 @@ public final class JType {
 
 	}
 
+	/**
+	 * Returns the type in DynAlloy's syntax, the text that goes into the DynAlloy output (see the
+	 * class comment). Special types print fixed texts, with the {@code java_lang_} and
+	 * {@code java_util_} prefixes that the configuration asks for, such as
+	 * {@code java_lang_IntArray -> (Int set -> lone Int)}.
+	 *
+	 * @return the text
+	 */
 	@Override
 	public String toString() {
 		StringBuffer sb = new StringBuffer();
@@ -764,6 +1040,14 @@ public final class JType {
 		return result;
 	}
 
+	/**
+	 * Compares the domain and the image (as lists), the function and sequence flags and the special
+	 * type, but not the set flag, the multipliers or the image-is-sequence flag (see the class
+	 * comment).
+	 *
+	 * @param obj the other object
+	 * @return true if equal
+	 */
 	@Override
 	public boolean equals(Object obj) {
 		if (this == obj)

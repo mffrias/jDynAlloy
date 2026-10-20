@@ -16,6 +16,43 @@ import ar.edu.jdynalloy.factory.JPredicateFactory;
 
 import java.util.*;
 
+/**
+ * Removes recursion by unfolding it a bounded number of times, so that the programs DynAlloy
+ * receives do not recurse: the sixth preparation step of {@code JDynAlloyTranslator.translateAll},
+ * run on every module after {@link PruneVisitor}, with the bound
+ * {@code JDynAlloyBinding.unfoldScopeForRecursiveCode}, which TACO sets to its loop-unrolling
+ * bound (docs/ARCHITECTURE.md, "How TACO calls it", step 1, and "The translation", step 6).
+ *
+ * <p>Programs are identified by name and parameter types ({@code <id>(<types>)}, without
+ * {@code thiz}, {@code throw} and {@code return}, with Java's names for primitive values and
+ * their arrays), on a call graph of its own, built from the modules the given graph carries: a
+ * call has an edge to every program with its name and number of arguments, which is how DynAlloy
+ * tells programs apart (d2b09e9, docs/NAMING.md). A program is recursive if it can reach itself
+ * in that graph. For each recursive program p, with bound n:
+ * <ul>
+ * <li>every program reachable from p, p included, gets copies {@code <id>_unfold_0} to
+ *     {@code <id>_unfold_<n>}, with the same parameters and specification cases;</li>
+ * <li>in copy i, a call that can lead back to p goes to {@code <callee>_unfold_<i+1>} if
+ *     i + 1 &lt; n, and becomes {@code assume true = false} otherwise; other calls are kept;</li>
+ * <li>in p, such a call goes to {@code <callee>_unfold_0} ({@code assume true = false} if n is
+ *     0).</li>
+ * </ul>
+ * So an execution that nests more than n calls on its way back to p is dropped. Copy
+ * {@code _unfold_<n>} is never called, and neither are the copies of the programs that cannot
+ * reach p. Unclear: whether only the programs on a cycle through p were meant to be copied.
+ * The copies are added to the module of p, whichever module the copied program comes from, and
+ * have no arithmetic encodings (null).
+ *
+ * <p>When p also calls other programs, the program rebuilt as p is the last one that the loop
+ * over the reachable programs fetched, since the loop reassigns the variable that holds p: p
+ * can be replaced by a second copy of another program and disappear from its module, and TACO
+ * then fails with a {@code NullPointerException} (checked by running TACO; TACO's
+ * docs/FIXES-FOR-MASTER.md, F14).
+ *
+ * <p>Returns new modules, to whose program sets the copies are then added. The programs by id,
+ * the typed graph and the copies of the module being visited are per instance, and the
+ * translator creates one per translation; no static state.
+ */
 class RecursionUnfolderVisitor extends JDynAlloyMutator {
 
 	// Programs are identified by name and parameter types, as JBindingKey does, so that overloads
@@ -33,6 +70,19 @@ class RecursionUnfolderVisitor extends JDynAlloyMutator {
 		return unfolded_programs;
 	}
 
+	/**
+	 * Creates the unfolder. The modules come from {@code callGraph.getExtraData()}, which must be
+	 * the {@code Vector<JDynAlloyModule>} the graph was built from ({@link Graph#setExtraData});
+	 * the translator passes its first call graph, built before pruning, so the typed graph and the
+	 * programs copied are those of the modules before {@link PruneVisitor}. The graph itself is not
+	 * used.
+	 *
+	 * @param callGraph a call graph that carries its modules
+	 * @param unroll the bound n (see the class comment)
+	 * @param isJavaArith true with Java arithmetic; passed to {@code JDynAlloyVisitor}
+	 * @throws ClassCastException if the extra data is not a {@code Vector}
+	 * @throws NullPointerException if the graph carries no extra data
+	 */
 	public RecursionUnfolderVisitor(Graph<String> callGraph, int unroll, boolean isJavaArith) {
 		super(isJavaArith);
 		Vector<JDynAlloyModule> modules = (Vector<JDynAlloyModule>) callGraph.getExtraData();
@@ -52,6 +102,12 @@ class RecursionUnfolderVisitor extends JDynAlloyMutator {
 		this.unroll = unroll;
 	}
 
+	/**
+	 * Rebuilds the module, and adds to its programs the copies made while visiting them.
+	 *
+	 * @param node the module
+	 * @return the new module
+	 */
 	@Override
 	public Object visit(JDynAlloyModule node) {
 		this.unfolded_programs.clear();
@@ -63,6 +119,24 @@ class RecursionUnfolderVisitor extends JDynAlloyMutator {
 	private String unfold_programId = null;
 	private int unfold_index = -1;
 
+	/**
+	 * Rebuilds a program that is not recursive as {@code JDynAlloyMutator} does. For a recursive
+	 * one, makes the copies of the class comment and returns the program with its calls
+	 * redirected.
+	 *
+	 * <p>As written, the variable that holds the program is reused for each program copied, so the
+	 * program returned is built from the last program of the reachable set (a {@code HashSet}, in
+	 * its iteration order). That is the visited program only if it comes last or reaches no other
+	 * program; otherwise the visited program is replaced by another one, rebuilt. A program
+	 * reachable from two recursive programs is copied once for each, with different redirections:
+	 * in one module the copies have the same header, so they are {@code equals} and the module's
+	 * set keeps the first one added; in two modules, both get copies with the same names.
+	 *
+	 * @param n the program
+	 * @return the rebuilt program
+	 * @throws NullPointerException if a node reachable from a recursive program has no program (a
+	 *         call whose name and number of arguments match no program)
+	 */
 	@Override
 	public Object visit(JProgramDeclaration n) {
 		String programId = n.getProgramId();
@@ -224,6 +298,14 @@ class RecursionUnfolderVisitor extends JDynAlloyMutator {
 		return params;
 	}		
 
+	/**
+	 * Redirects a call that can lead back to the recursive program, inside a copy or inside the
+	 * recursive program being rebuilt (see the class comment); rebuilds the other calls. A
+	 * redirected call keeps its arguments and its {@code super} flag.
+	 *
+	 * @param n the call
+	 * @return a new {@code JProgramCall}, or a {@code JAssume} of {@code true = false}
+	 */
 	@Override
 	public Object visit(JProgramCall n) {
 		if (unfold_index!=-1 && unfold_programId != null) {

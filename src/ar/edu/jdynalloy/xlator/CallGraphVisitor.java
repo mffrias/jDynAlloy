@@ -7,6 +7,21 @@ import ar.edu.jdynalloy.ast.JProgramCall;
 import ar.edu.jdynalloy.ast.JProgramDeclaration;
 import ar.edu.jdynalloy.ast.JVariableDeclaration;
 
+/**
+ * Builds the call graph of a set of modules ({@link #getCallGraph()}): a node for each program
+ * and each program called, and an edge from each program to each program it calls. Nodes are
+ * names: a program's node is its program id, and a call's node is the call's program id, which
+ * {@code VAlloyVisitor} has made the id of the program it is bound to. So overloads, and
+ * programs of the same name in different modules, share a node. Only {@code call} statements
+ * make edges; programs used in specifications ({@code callSpec}) do not. One instance visits all
+ * the modules and holds the graph; the visits return {@code JDynAlloyVisitor}'s results, which
+ * are not used, and the modules are not changed. No static state.
+ *
+ * <p>{@code JDynAlloyTranslator.translateAll} builds two (docs/ARCHITECTURE.md, "The
+ * translation"): one after {@code ModularMutator}, for {@link PruneVisitor} and, as the
+ * carrier of the modules, {@link RecursionUnfolderVisitor}; and one after the recursion is
+ * unfolded, for {@link ModifiesTableBuilder}.
+ */
 class CallGraphVisitor extends JDynAlloyVisitor {
 
 	String classToCheck = "";
@@ -79,6 +94,19 @@ class CallGraphVisitor extends JDynAlloyVisitor {
 		return params;
 	}
 
+	/**
+	 * Adds the program's node and makes it the caller of the calls in its body. The node is the
+	 * program id, except for a program whose {@code <id>(<parameter types>)} (without
+	 * {@code thiz}, {@code throw} and {@code return}, with Java's names for primitive values and
+	 * their arrays) equals {@code classToCheck + "_" + methodToCheck}: that one gets the typed
+	 * name. TACO passes {@code methodToCheck} without types, and it already starts with the
+	 * class, so no program matches and every node is a plain program id (docs/NAMING.md, "Where
+	 * the method under analysis is looked up"). If one matched, calls to it would still go to the
+	 * untyped node.
+	 *
+	 * @param node the program
+	 * @return {@code JDynAlloyVisitor}'s result
+	 */
 	@Override
 	public Object visit(JProgramDeclaration node) {
 		String qualifiedCheckedMethodName = this.classToCheck + "_" + this.methodToCheck.replaceAll(" ", "");

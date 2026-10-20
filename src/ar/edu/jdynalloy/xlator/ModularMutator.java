@@ -30,12 +30,50 @@ import ar.uba.dc.rfm.alloy.util.ExpressionCloner;
 import ar.uba.dc.rfm.alloy.util.FormulaCloner;
 import ar.uba.dc.rfm.alloy.util.VarSubstitutor;
 
+/**
+ * Replaces the bodies of programs by their specifications, for modular reasoning: the third
+ * preparation step of {@code JDynAlloyTranslator.translateAll}, run only with
+ * {@code modularReasoning}, on every module, after {@code JDynAlloyTransformationVisitor}
+ * (docs/ARCHITECTURE.md, "The translation"). The translator then writes the result to
+ * {@code outputModularJDynalloy} if that is set. Returns new modules; the input is not changed.
+ *
+ * <p>Every program except the method under analysis gets the body
+ * <pre>
+ *   assert R1 or ... or Rn;
+ *   havoc m1; ... havoc mk;
+ *   assume R1 =&gt; (E1 and F1); ... assume Rn =&gt; (En and Fn)
+ * </pre>
+ * for its specification cases 1 to n, where {@code Ri} is the conjunction of case i's
+ * {@code requires}, {@code m1 ... mk} are the locations of all the cases' {@code modifies},
+ * {@code Ei} is the conjunction of case i's {@code ensures} moved to this state (a primed
+ * variable becomes the plain one, a plain one the pre-state {@code \pre[x]};
+ * {@link PreStateExprMutator}), and {@code Fi} says that each of those locations that case i
+ * does not modify equals its pre-state value. The {@code requires} are not moved, so they are
+ * evaluated after the {@code havoc}s. A program without specification cases gets
+ * {@code assert true} and nothing else, so it changes nothing. The new program keeps the id,
+ * signature id, flags, parameters and specification cases, is not virtual, and has no
+ * arithmetic encodings (null).
+ *
+ * <p>The method under analysis keeps its body: the program of the module {@code classToCheck}
+ * whose id equals the configuration's {@code methodToCheck}. That {@code methodToCheck} has
+ * the parameter types and program ids do not, so no program matches and the method under
+ * analysis is replaced by its specification too (docs/NAMING.md, "Where the method under
+ * analysis is looked up"). Reads {@code JDynAlloyConfig.getInstance()} for each program. The
+ * module being visited is the only state; no static state.
+ */
 class ModularMutator extends JDynAlloyMutator {
 
 	public ModularMutator(boolean isJavaArithmetic) {
 		super(isJavaArithmetic);
 	}
 
+	/**
+	 * Moves a formula of the post-state one state back: a primed variable becomes the plain one
+	 * ({@code x'} becomes {@code x}), and a plain variable not bound by a quantifier becomes the
+	 * pre-state variable ({@code AlloyVariable.buildPreStateVariable}, printed {@code \pre[x]}).
+	 * Like {@code PostconditionExprMutator}, it must run inside a {@code JFormulaMutator}, to
+	 * which it casts its formula visitor. No state.
+	 */
 	static class PreStateExprMutator extends VarSubstitutor {
 
 		@Override

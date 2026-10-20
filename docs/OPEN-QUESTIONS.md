@@ -131,3 +131,14 @@ Points where the code does not say what was intended, for the maintainer
     still decide this? (The commented-out code around it suggests it once did.)
 27. **`DynAlloyAction`** (`xlator/DynAlloyAction.java`): nothing uses it, and its static counter
     `index` would grow across runs in one JVM. Can it go?
+28. **What recursion unfolding copies** (`xlator/RecursionUnfolderVisitor.java:76`,
+    `visit(JProgramDeclaration)`): every program reachable from the recursive one
+    (`descendentsOf`) is copied, not only the programs on a cycle through it; copies of programs
+    that cannot reach it back are never called. Should only the cycle be copied? (See also
+    ObjectCreationDetector, item 26.)
+29. **The `_0` suffix** (`xlator/VAlloyVisitor.java:82-96`, `resolveUniqueProgramId`): it needs a
+    pure overload with no `java_lang_Throwable` parameter, but every program has
+    `throw: java_lang_Throwable+null`, so in practice no program gets it (NAMING.md and
+    ARCHITECTURE.md say a second overload does). Is it still meant to apply?
+30. **`JDynAlloyAssertionFinderVisitor`** (`xlator/`): nothing in jDynAlloy or TACO uses it. Can it
+    go?

@@ -34,6 +34,31 @@ public class JDynAlloyTransformationVisitor extends JDynAlloyMutator {
 	}
 
 	
+	/**
+	 * Replaces a {@code while} that has a loop invariant {@code I} by a check of the invariant,
+	 * the second preparation step of {@code JDynAlloyTranslator.translateAll}, which runs one
+	 * instance of this mutator on every module after {@code VAlloyVisitor}
+	 * (docs/ARCHITECTURE.md, "The translation"). With {@code G} the guard
+	 * {@code throw = null and exit_stmt_reached = false}, the loop becomes the block
+	 * <pre>
+	 *   if G { assert I };
+	 *   if G { havoc l1; ... havoc lk; assume I };
+	 *   if C { body; if G { assert I }; if G { assume false } }
+	 * </pre>
+	 * where {@code C} is the loop's condition and {@code l1 ... lk} are the locations the loop
+	 * assigns ({@link DynJAlloyLocationFinderVisitor}: not those its calls assign; from TACO no
+	 * loop gets here, since TACO's {@code WhileRemoverSimplifier} unrolls every {@code while}
+	 * and drops its invariant before the translation). Every new
+	 * {@code if} has the loop's branch id. So the invariant must hold on entry, an arbitrary
+	 * iteration starts from any state that satisfies it, and it must hold again after that
+	 * iteration, whose executions are then dropped unless they threw or reached a
+	 * {@code return}. Loops nested in the body are transformed first; a loop without an
+	 * invariant is rebuilt unchanged. The other nodes are rebuilt as {@code JDynAlloyMutator}
+	 * does. No static state.
+	 *
+	 * @param n the loop
+	 * @return a new {@code JBlock} for a loop with an invariant, otherwise a new {@code JWhile}
+	 */
 	@Override
 	public Object visit(JWhile n) {
 		JWhile module = (JWhile) super.visit(n);
