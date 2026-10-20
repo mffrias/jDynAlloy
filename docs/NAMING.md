@@ -52,14 +52,14 @@ said.
 
 | Where | Compares | For |
 |---|---|---|
-| `relevancy/RelevancyAnalysisUtils.java:131` | the configuration's `methodToCheck` with `<program>(<parameter types>)`, in the module `classToCheck` | the starting point of the relevancy analysis; "The method to check was not found" if none |
-| `modifies/ModifiesSolverManager.java:110` | the same | checking that the method exists |
-| `xlator/JDynAlloyTranslator.java:126-127` | `methodToCheck` up to `(` | the root of `PruneVisitor` |
-| `xlator/CallGraphVisitor.java:84-87` | `classToCheck + "_" + methodToCheck` with `<program>(<types>)` | a typed node name for the method under analysis; TACO passes the name without types, so it never matches and every node is a plain program name |
-| `xlator/JDynAlloyXlatorVisitor.java:627` | the signature with `classToCheck`, and the program with `methodToCheck` up to `(` | which program gets `check_<program>` |
-| `xlator/JDynAlloyXlatorVisitor.java:1825` (`getFullyQualifiedMethodName`), used at `ast/JDynAlloyVisitor.java:344` | the program with `methodToCheck` | which program gets the fixed input |
-| `xlator/ModularMutator.java:76` | the program with the configuration's `methodToCheck`, with its types | which program keeps its body with `modularReasoning`; the program has no types in its name, so it never matches |
-| `modifies/ReplaceModifiesModuleVisitor.java:431` | `methodToCheck.startsWith(<signature>_<program>_)` | which program's `modifies` become frame conditions; never matches the new names ([KNOWN-LIMITATIONS.md](KNOWN-LIMITATIONS.md#analysis)) |
+| `relevancy/RelevancyAnalysisUtils.java:174` | the configuration's `methodToCheck` with `<program>(<parameter types>)`, in the module `classToCheck` | the starting point of the relevancy analysis; "The method to check was not found" if none |
+| `modifies/ModifiesSolverManager.java:134` | the same | checking that the method exists |
+| `xlator/JDynAlloyTranslator.java:208-209` | `methodToCheck` up to `(` | the root of `PruneVisitor` |
+| `xlator/CallGraphVisitor.java:112-115` | `classToCheck + "_" + methodToCheck` with `<program>(<types>)` | a typed node name for the method under analysis; TACO passes the name without types, so it never matches and every node is a plain program name |
+| `xlator/JDynAlloyXlatorVisitor.java:830` | the signature with `classToCheck`, and the program with `methodToCheck` up to `(` | which program gets `check_<program>` |
+| `xlator/JDynAlloyXlatorVisitor.java:2057` (`getFullyQualifiedMethodName`), used at `ast/JDynAlloyVisitor.java:469` | the program with `methodToCheck` | which program gets the fixed input |
+| `xlator/ModularMutator.java:114` | the program with the configuration's `methodToCheck`, with its types | which program keeps its body with `modularReasoning`; the program has no types in its name, so it never matches |
+| `modifies/ReplaceModifiesModuleVisitor.java:517` | `methodToCheck.startsWith(<signature>_<program>_)` | which program's `modifies` become frame conditions; never matches the new names ([KNOWN-LIMITATIONS.md](KNOWN-LIMITATIONS.md#analysis)) |
 
 ## The new naming
 

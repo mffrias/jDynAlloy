@@ -24,7 +24,7 @@ seen (in a run, through TACO's `stryker` branch, macOS on Apple Silicon, Zulu
   function/predicate call`). Either alone works (seen). A regression: on
   comitaco, whose jDynAlloy named programs `<signature>_<program>_<index>`,
   it works; the index went with this repository's first commit, 5b33641
-  (`VAlloyVisitor.java:78`, `100-101`).
+  (`VAlloyVisitor.java:110`, `132-133`).
 - **`f(null)` is an "Ambiguous call" with Java arithmetic** when `f` has an
   `int` and an object overload: `int` values are objects
   (`JavaPrimitiveIntegerValue`) then, and `null` fits both (seen).
