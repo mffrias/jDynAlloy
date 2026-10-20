@@ -2,6 +2,15 @@ package ar.edu.jdynalloy.ast;
 
 import ar.uba.dc.rfm.alloy.ast.expressions.AlloyExpression;
 
+/**
+ * A location in the {@code modifies} of a {@link JSpecCase} ({@code modifies {E}}), or "modifies
+ * everything" when the location is null ({@link #buildModifiesEverything()}, or the constructor
+ * with null), which {@code JDynAlloyPrinter} prints as {@code EVERYTHING}. TACO makes them from
+ * JML {@code assignable} clauses. They reach the analysis only through
+ * {@code ReplaceModifiesModuleVisitor}, whose frame conditions never apply with TACO's names
+ * (docs/KNOWN-LIMITATIONS.md, "{@code modifies} clauses add no frame conditions"), and through
+ * {@code ModularMutator} with {@code modularReasoning}. Equal when the locations are equal.
+ */
 public final class JModifies {
 
 	public AlloyExpression getLocation() {
@@ -38,6 +47,11 @@ public final class JModifies {
 		this(null);
 	}
 
+	/**
+	 * Returns a clause that modifies everything, as for JML {@code assignable \everything}.
+	 *
+	 * @return a new clause with a null location; equal to every other such clause
+	 */
 	public static JModifies buildModifiesEverything() {
 		return new JModifies();
 	}

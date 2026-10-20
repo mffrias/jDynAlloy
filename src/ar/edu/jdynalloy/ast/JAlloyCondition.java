@@ -2,6 +2,14 @@ package ar.edu.jdynalloy.ast;
 
 import ar.uba.dc.rfm.alloy.ast.formulas.PredicateFormula;
 
+/**
+ * A precondition or postcondition of a {@link JAssertionDeclaration}: a predicate call
+ * ({@code PredicateFormula}). Equal when the formulas are equal.
+ *
+ * <p>Unused, like {@link JAssertionDeclaration}: nothing in jDynAlloy or TACO creates one, and
+ * {@code JDynAlloyVisitor.visit(JAlloyCondition)} throws {@code IllegalArgumentException} ("class
+ * JAlloyCondition not supported"). Unclear: whether the two classes are still needed.
+ */
 public final class JAlloyCondition {
 	private final PredicateFormula f;
 

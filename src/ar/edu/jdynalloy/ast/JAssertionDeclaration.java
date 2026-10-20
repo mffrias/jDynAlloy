@@ -9,6 +9,18 @@ import ar.edu.jdynalloy.ast.JAssertionDeclaration;
 import ar.edu.jdynalloy.xlator.JDynAlloyTyping;
 import ar.uba.dc.rfm.alloy.AlloyCheckCommand;
 
+/**
+ * An assertion as a JDynAlloy node: an id, a typing, a precondition, a program (a statement), a
+ * postcondition and a set of Alloy check commands ({@code geChkCmds()}). {@code equals} and
+ * {@code hashCode} use all the parts but the check commands.
+ *
+ * <p>Unused: nothing in jDynAlloy or TACO creates one, the grammar has no syntax for it, and
+ * {@code JDynAlloyVisitor.visit(JAssertionDeclaration)} throws {@code IllegalArgumentException}
+ * ("class JAlloyAssertion not supported"). The assertion {@code check_<program>} is built by
+ * {@code JDynAlloyXlatorVisitor} directly as a dynalloy4 {@code AssertionDeclaration}
+ * (docs/ARCHITECTURE.md, "The assertion {@code check_<method>}"). Unclear: whether this class and
+ * {@link JAlloyCondition} are still needed.
+ */
 public final class JAssertionDeclaration {
 	
 	private final JAlloyCondition precondition;

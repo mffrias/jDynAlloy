@@ -2,6 +2,19 @@ package ar.edu.jdynalloy.ast;
 
 import ar.uba.dc.rfm.alloy.ast.formulas.AlloyFormula;
 
+/**
+ * {@code while F [loop_invariant I] { ... };}: a loop, with an optional loop invariant and branch
+ * id. {@code JDynAlloyTransformationVisitor} replaces a loop that has an invariant before the
+ * translation proper ({@link JLoopInvariant}). {@code JDynAlloyXlatorVisitor} translates the
+ * others into DynAlloy's {@code while} with {@code nestedLoopUnroll}, and into
+ * {@code (test F; body)*; test !F} otherwise; dynalloy4 unrolls both (docs/ARCHITECTURE.md,
+ * "JDynAlloyXlatorVisitor: modules, programs, statements"). The branch id is printed as
+ * {@code lblpos} and given by the transformation to the statements it adds, but the translation
+ * of the loop itself does not use it.
+ *
+ * <p>{@code equals} and {@code hashCode} use the branch id, the condition and the body, not the
+ * loop invariant.
+ */
 public final class JWhile extends JStatement {
 
 	private final AlloyFormula condition;
@@ -12,6 +25,14 @@ public final class JWhile extends JStatement {
 
 	private final String branchId;
 
+	/**
+	 * Creates a loop.
+	 *
+	 * @param condition the loop condition
+	 * @param body the body
+	 * @param loopInvariant the loop invariant, or null for none
+	 * @param branchId the label of the loop, or null for none
+	 */
 	public JWhile(AlloyFormula condition, JStatement body,
 			JLoopInvariant loopInvariant, String branchId) {
 		super();

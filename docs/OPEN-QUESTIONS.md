@@ -97,3 +97,25 @@ Points where the code does not say what was intended, for the maintainer
     of the signature itself, the class and literal singletons, empty blocks, bodies that are not
     blocks), while `super`, `pure` and the arithmetic predicates and variables are dropped. Is it
     meant to be read back, or only for people?
+20. **`JAssertionDeclaration` and `JAlloyCondition`** (`ast/`): nothing creates them, the grammar
+    has no syntax for them, and `JDynAlloyVisitor.visit` throws for both
+    (`ast/JDynAlloyVisitor.java:125-133`); `check_<program>` is built directly as a dynalloy4
+    `AssertionDeclaration`. Can they go?
+21. **Class constraints** (`ast/JClassConstraint.java`): they have no effect on the analysis.
+    `JDynAlloyXlatorVisitor` declares `class_constraint_predicates`
+    (`xlator/JDynAlloyXlatorVisitor.java:1346`, `1353`) but never fills it, nothing else
+    translates them, and the relevancy analysis skips them (item 10). Are they meant to be checked,
+    as object constraints are in the postcondition?
+22. **`JDynAlloyModule.prefixArgs`** (`ast/JDynAlloyModule.java:228`): nothing in jDynAlloy or
+    TACO calls it. It makes parameters pass by value (`arg_x`), which may be where the
+    `arg_throw` that `JProgramDeclaration.isStatic` accepts comes from; nothing creates `arg_throw`.
+    What was it for, and should it stay?
+23. **A program's object-invariant arithmetic encodings** (`ast/JProgramDeclaration.java:90-91`,
+    `167-173`): always empty, with no setter and no reader; the module's own lists are the ones
+    used. Are they still needed?
+24. **`ListAccess` and `MapAccess`** (`ast/ListAccess.java`, `ast/MapAccess.java`): they match the
+    variables `List_contains` and `Map_entries`, but TACO always uses qualified names
+    (`TacoConfigurator.getUseQualifiedNamesForJTypes` returns true) and its models use
+    `java_util_Map_entries` and `java_util_List_seq`, so nothing appears to produce either name;
+    the prelude's `updateList` is commented out (`factory/JPreludeFactory.java:409-433`). Are
+    these checks still needed?

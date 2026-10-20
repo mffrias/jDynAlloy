@@ -2,6 +2,14 @@ package ar.edu.jdynalloy.ast;
 
 import ar.uba.dc.rfm.alloy.ast.formulas.AlloyFormula;
 
+/**
+ * {@code assume F;}: keeps only the executions in which {@code F} holds;
+ * {@code JDynAlloyXlatorVisitor} translates it into a DynAlloy test of {@code F}. TACO emits it
+ * for JML {@code assume} statements and in its models of JDK classes, and
+ * {@code JDynAlloyTransformationVisitor} for loop invariants (docs/ARCHITECTURE.md, step 2 of the
+ * translation). {@code BindingManager} binds the {@code callSpec} formulas in it. Equal when the
+ * formulas are equal.
+ */
 public final class JAssume extends JStatement {
 
 	public JAssume(AlloyFormula assume) {

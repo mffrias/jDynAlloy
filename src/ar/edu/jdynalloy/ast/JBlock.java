@@ -3,6 +3,15 @@ package ar.edu.jdynalloy.ast;
 import java.util.LinkedList;
 import java.util.List;
 
+/**
+ * A sequence of statements, translated into a DynAlloy composition; {@code JDynAlloyPrinter}
+ * prints it between braces. The constructor that takes an array copies it into a new list; the
+ * one that takes a list keeps that list, and {@link #getBlock()} returns it, so a change to the
+ * list changes the block (the blocks of {@code JAlloyProgramBuffer} share their lists with the
+ * buffer). A block must not be empty
+ * when it is translated: {@code JDynAlloyXlatorVisitor.visit(JBlock)} throws
+ * {@code IllegalArgumentException} for an empty one. Equal when the lists are equal.
+ */
 public final class JBlock extends JStatement {
 
 	private final List<JStatement> block;

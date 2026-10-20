@@ -13,6 +13,51 @@ import ar.uba.dc.rfm.alloy.ast.formulas.AlloyFormula;
 import ar.uba.dc.rfm.alloy.util.ArgAppenderExpressionMutator;
 import ar.uba.dc.rfm.alloy.util.FormulaMutator;
 
+/**
+ * A JDynAlloy module: one class or interface (or a module of TACO's own, such as
+ * {@code ClassFields} or a literal), with its signature, its class singleton and literal
+ * singleton signatures, its instance fields, its class and object invariants and constraints, its
+ * {@code represents} clauses, its programs, and the variables and predicates that encode the
+ * arithmetic in its object invariants (docs/LANGUAGE.md, "Modules"). TACO builds the modules of
+ * the classes under analysis with {@code DynJMLAlloyModuleBuffer} and those of its built-in
+ * classes directly, and parses its models of JDK classes; jDynAlloy's steps take the list of all
+ * of them, and {@code JDynAlloyXlatorVisitor} translates each into a DynAlloy module of the same
+ * name (docs/ARCHITECTURE.md). The module id is the signature's id, the class name with
+ * underscores ({@code java_util_Date}, docs/NAMING.md); the parser rejects a module whose name
+ * differs.
+ *
+ * <p>Mutable state. The getters return the collections given to the constructor, not copies, and
+ * callers change them: {@code SceneSlicerManager} removes fields from {@link #getFields()} in
+ * place, and TACO's JFSL front end adds fields, object invariants and {@code represents}. TACO
+ * sets the literal singleton of its built-in exception modules after creating them, and
+ * {@code ReplaceModifiesModuleVisitor} on its copies ({@link #setLiteralSingleton}); nothing
+ * calls {@link #setClassSingleton}. Only TACO fills the arithmetic encodings: its
+ * {@code JDynAlloyASTVisitor} sets them on every module of a compilation unit after translating
+ * it, and its {@code JDynAlloyParsingStage} sets empty ones on the modules it parses from files;
+ * the other producers pass empty ones. {@code JDynAlloyXlatorVisitor.visit(JDynAlloyModule)}
+ * replaces the predicates, during the translation, with a list in which the quantifiers are
+ * removed when {@code removeQuantifiers} is set. {@link #prefixArgs()} changes the programs in
+ * place.
+ *
+ * <p>{@link #pinnedForNonRelevancyAnalysisForStryker}, a public field set by the constructor,
+ * keeps a module through the relevancy analysis and the slicing whether or not the method under
+ * analysis reaches it. It is true only for the literal modules of a fixed input: those that
+ * {@code JDynAlloyTranslator} creates, and those that TACO's {@code PrecompiledModules} and
+ * {@code JDynAlloyVisitor} ask the {@code JavaPrimitive*Value} singletons for. Those singletons
+ * cache their literal modules for the life of the JVM, so a literal module keeps the flag it was
+ * first created with. Every copy ({@code JDynAlloyMutator}, {@code PruneVisitor},
+ * {@code SceneSlicerManager}, {@code ReplaceModifiesModuleVisitor}) passes the flag on.
+ *
+ * <p>Equality. {@code equals} and {@code hashCode} use the id, the signature, the two singletons,
+ * the fields, the object invariants, the {@code represents} and the programs; not the class
+ * invariants, the constraints, the arithmetic encodings or the pinned flag. As
+ * {@link JSignature#equals} is identity in effect, two modules are equal only if they share their
+ * signature object, as the copies of {@code PruneVisitor}, {@code SceneSlicerManager} and
+ * {@code ReplaceModifiesModuleVisitor} do and those of {@code JDynAlloyMutator}, which builds a
+ * new signature, do not. The relevancy analysis's {@code Scene} compares modules with
+ * {@code equals}, and TACO's {@code PrecompiledModules} collects literal modules in a
+ * {@code HashSet}. {@code toString()} is the module id. No static state.
+ */
 public final class JDynAlloyModule implements JDynAlloyASTNode {
 
 	
@@ -134,6 +179,28 @@ public final class JDynAlloyModule implements JDynAlloyASTNode {
 	private AlloyTyping varsEncodingValueOfArithmeticOperationsInObjectInvariants = new AlloyTyping();
 	private List<AlloyFormula> predsEncodingValueOfArithmeticOperationsInObjectInvariants = new ArrayList<AlloyFormula>();
 
+	/**
+	 * Creates a module from its parts; the collections are kept, not copied.
+	 *
+	 * @param moduleId the module's name, equal to the signature's id
+	 * @param signature the signature of the class
+	 * @param class_singleton the signature {@code <Sig>Class}, or null (TACO's classes have none)
+	 * @param literal_signature the signature {@code <Sig>Lit}, or null
+	 * @param fields the instance fields ({@link JField}); static fields belong to
+	 *        {@code ClassFields}
+	 * @param class_invariants the class invariants
+	 * @param class_constraints the class constraints
+	 * @param object_invariants the object invariants
+	 * @param object_constraints the object constraints
+	 * @param represents the abstraction functions
+	 * @param programs the programs; equal programs ({@link JProgramDeclaration}) are kept once
+	 * @param varsEncodingValueOfArithmeticOperationsInObjectInvariants the variables that encode
+	 *        the arithmetic in the object invariants; empty but for TACO's classes
+	 * @param predsEncodingValueOfArithmeticOperationsInObjectInvariants the predicates over those
+	 *        variables
+	 * @param pinnedForStryker true to keep the module through the relevancy analysis and the
+	 *        slicing (see the class comment)
+	 */
 	public JDynAlloyModule(String moduleId, 
 			JSignature signature,
 			JSignature class_singleton, 
@@ -225,6 +292,21 @@ public final class JDynAlloyModule implements JDynAlloyASTNode {
 		this.predsEncodingValueOfArithmeticOperationsInObjectInvariants = predsEncodingValueOfArithmeticOperationsInObjectInvariants2;
 	}
 
+	/**
+	 * Makes every program of the module take its parameters by value. Each parameter {@code x}
+	 * after {@code thiz} and {@code throw} (after {@code throw}, for a static program) becomes
+	 * {@code arg_x}; the body starts with {@code var x: T; x := arg_x;} for each, and the
+	 * {@code requires}, the {@code ensures} and the predicates for the arithmetic of the
+	 * contracts refer to {@code arg_x} instead of {@code x} (dynalloy4's
+	 * {@code ArgAppenderExpressionMutator}). Changes the programs in place
+	 * ({@code setParameters}, {@code setBody}, {@code JPrecondition.setFormula},
+	 * {@code JPostcondition.setFormula}) while they are in the module's set, whose hash codes
+	 * depend on the parameters.
+	 *
+	 * <p>Nothing in jDynAlloy or TACO calls it. It renames {@code return} too, which then becomes
+	 * a local variable of the body. Unclear: what it was meant for, and whether it is still
+	 * needed.
+	 */
 	public void prefixArgs() {
 		Set<JProgramDeclaration> modPrograms = this.programs;
 		for (JProgramDeclaration jpd : modPrograms){

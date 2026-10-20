@@ -2,6 +2,16 @@ package ar.edu.jdynalloy.ast;
 
 import ar.uba.dc.rfm.alloy.AlloyVariable;
 
+/**
+ * {@code createObject<C>[x];}: makes the variable {@code x} a new object of class {@code C}. TACO
+ * translates {@code x = new C(...)} into this statement followed by
+ * {@code call Constructor[x, ...]}. {@code JDynAlloyXlatorVisitor} translates it into
+ * {@code getUnusedObject[x]} (an object not in {@code usedObjects}, which is then added to it)
+ * followed by a test that the class of {@code x} is {@code C}: {@code classOf} with
+ * {@code useClassSingletons}, {@code instanceOf} otherwise.
+ *
+ * <p>{@code equals} and {@code hashCode} compare only the variable, not the class.
+ */
 public final class JCreateObject extends JStatement {
 
 	private final String signatureId;

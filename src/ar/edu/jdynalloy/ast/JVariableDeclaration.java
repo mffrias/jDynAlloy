@@ -3,6 +3,14 @@ package ar.edu.jdynalloy.ast;
 import ar.edu.jdynalloy.xlator.JType;
 import ar.uba.dc.rfm.alloy.AlloyVariable;
 
+/**
+ * {@code var x: T}: a variable and its type, used both as a statement of a body (a local
+ * variable, {@code var x: T;}) and as a parameter of a {@link JProgramDeclaration}.
+ * {@code JDynAlloyXlatorVisitor} translates it into {@code skip} and records the variable with
+ * its type: as a parameter of the DynAlloy program if it is one of the program's parameters, as a
+ * local variable otherwise. Equal when the variable and the type are equal; programs compare
+ * their parameters so ({@link JProgramDeclaration}).
+ */
 public final class JVariableDeclaration extends JStatement {
 
 	private final JType type;

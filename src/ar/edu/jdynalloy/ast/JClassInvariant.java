@@ -2,6 +2,16 @@ package ar.edu.jdynalloy.ast;
 
 import ar.uba.dc.rfm.alloy.ast.formulas.AlloyFormula;
 
+/**
+ * {@code class_invariant F}: an invariant of the static state of a class, which TACO makes from
+ * static JML {@code invariant} clauses. As with {@link JClassConstraint}, the modules built with
+ * {@code DynJMLAlloyModuleBuffer} hand them to {@code StaticFieldsModuleBuilder}, so they all end
+ * up in the module {@code ClassFields}. {@code JDynAlloyXlatorVisitor} conjoins the class
+ * invariants of a module into the predicate {@code <Sig>_class_invariant}, which goes into the
+ * precondition of the method under analysis and, primed, into its postcondition
+ * (docs/ARCHITECTURE.md, "The assertion {@code check_<method>}", says when). Equal when the
+ * formulas are equal.
+ */
 public class JClassInvariant {
 
 	public JClassInvariant(AlloyFormula formula) {

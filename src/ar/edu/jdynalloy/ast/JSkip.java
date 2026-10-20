@@ -1,5 +1,10 @@
 package ar.edu.jdynalloy.ast;
 
+/**
+ * {@code skip;}: does nothing, and is translated into DynAlloy's {@code skip}. All instances are
+ * equal. {@code JAlloyProgramBuffer} uses it for an empty branch or body, so an {@code if}
+ * without {@code else} has {@code skip} there.
+ */
 public final class JSkip extends JStatement {
 
 	private static final int HASHCODE = 56;

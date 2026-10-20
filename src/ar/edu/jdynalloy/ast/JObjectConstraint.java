@@ -2,6 +2,14 @@ package ar.edu.jdynalloy.ast;
 
 import ar.uba.dc.rfm.alloy.ast.formulas.AlloyFormula;
 
+/**
+ * {@code object_constraint F}: a constraint on the objects of a class, which TACO makes from JML
+ * {@code constraint} clauses (history constraints). {@code JDynAlloyXlatorVisitor} conjoins the
+ * object constraints of a module into the predicate {@code <Sig>_object_constraint}, which the
+ * postcondition of the method under analysis states for every object of the class, for every
+ * relevant module. The relevancy analysis does not look into them (docs/OPEN-QUESTIONS.md, item
+ * 10). Equal when the formulas are equal.
+ */
 public class JObjectConstraint {
 
 	public JObjectConstraint(AlloyFormula formula) {

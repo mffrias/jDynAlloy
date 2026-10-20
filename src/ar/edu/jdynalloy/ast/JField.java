@@ -3,6 +3,22 @@ package ar.edu.jdynalloy.ast;
 import ar.edu.jdynalloy.xlator.JType;
 import ar.uba.dc.rfm.alloy.AlloyVariable;
 
+/**
+ * {@code field f: (C)->one(T) {}}: an instance field of a class, as a relation from the class to
+ * the field's type: its variable, named {@code <class>_<field>} by TACO (docs/NAMING.md; the
+ * {@code .djals} models choose their own names, such as {@code dateHashCode}), and its type.
+ * {@code DynJMLAlloyModuleBuffer} types a field {@code C->one(T)}, a set field
+ * {@code C->(T1+...)}, a sequence with {@code JTypeFactory.buildFieldSeq}, and the
+ * {@code SK_jml_pred_java_primitive_*} fields with their own type; a static field becomes
+ * {@code <module>_<field>}, of type {@code ClassFields->one(T)}, in the module
+ * {@code ClassFields}.
+ *
+ * <p>Fields are not Alloy fields of the signature: the translation passes each one, as a
+ * variable, to every program and every call (docs/ARCHITECTURE.md, "JDynAlloyXlatorVisitor:
+ * modules, programs, statements"). Equal when the variable and the type are equal;
+ * {@code SceneSlicerManager} removes fields from a module by {@code equals}, and TACO's symmetry
+ * breaking collects them in a {@code HashSet}.
+ */
 public final class JField {
 
 	public JField(AlloyVariable fieldVariable, JType fieldType) {

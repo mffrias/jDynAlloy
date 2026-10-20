@@ -4,8 +4,27 @@ import ar.edu.jdynalloy.xlator.JType;
 import ar.uba.dc.rfm.alloy.ast.expressions.AlloyExpression;
 import ar.uba.dc.rfm.alloy.ast.formulas.AlloyFormula;
 
+/**
+ * {@code represents thiz.f such that F}: an abstraction function, which TACO makes from JML
+ * {@code represents} clauses: {@code F} defines the abstract (model) field {@code f} of
+ * {@code thiz}. {@code JDynAlloyXlatorVisitor} wraps {@code F} into the predicate
+ * {@code <Sig>_<field>_abstraction}, which goes into the precondition of the method under
+ * analysis; after the call, for each {@code represents} whose fields the method modifies, it adds
+ * {@code havoc} of the abstract field and {@code assume} of its abstraction
+ * (docs/ARCHITECTURE.md, "The assertion {@code check_<method>}"). Equal when the three parts are
+ * equal.
+ */
 public class JRepresents {
 
+	/**
+	 * Creates an abstraction function.
+	 *
+	 * @param expression the abstract field: {@code thiz.f} or {@code f}, the only forms the
+	 *        parser accepts
+	 * @param expressionType the type of the field {@code f} as its module declares it, not that
+	 *        of the expression
+	 * @param formula the formula that defines the field
+	 */
 	public JRepresents(AlloyExpression expression, JType expressionType, AlloyFormula formula) {
 		super();
 		this.expression = expression;
