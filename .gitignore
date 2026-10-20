@@ -10,3 +10,5 @@ bin
 dist
 .classpath
 .project
+# Built from the dynalloy4 repository (README; setupTACO.sh copies it here)
+lib/dynalloy4.jar
