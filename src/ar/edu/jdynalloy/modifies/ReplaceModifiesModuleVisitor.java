@@ -72,6 +72,27 @@ import ar.uba.dc.rfm.alloy.ast.formulas.AndFormula;
 import ar.uba.dc.rfm.alloy.ast.formulas.EqualsFormula;
 import ar.uba.dc.rfm.alloy.ast.formulas.IFormulaVisitor;
 
+/**
+ * Turns the {@code modifies} clauses of the method under analysis into frame conditions, extra
+ * {@code ensures}: the visitor that {@link ModifiesSolverManager} runs on the module of the class
+ * under analysis. {@link #visit(JDynAlloyModule)} returns a new module with each program visited;
+ * {@link #visit(JProgramDeclaration)} rebuilds only the program whose
+ * {@code <signature>_<program>_} starts {@code methodToCheck}, with its specification cases
+ * visited ({@link #visit(JSpecCase)}), and TACO's names never match that test
+ * (docs/KNOWN-LIMITATIONS.md, "{@code modifies} clauses add no frame conditions";
+ * docs/OPEN-QUESTIONS.md, item 2). Every other node is returned as it is. So, in practice, the
+ * result is a new module with the same programs. An unused, reduced copy of this class is in the
+ * {@code slicer} package (docs/OPEN-QUESTIONS.md, item 7).
+ *
+ * <p>The frame conditions it would add are {@code p.g = p.g'} for the fields {@code g} of a
+ * parameter {@code p} that the clauses do not name (comitaco's {@code thiz.b = thiz.b'}); it does
+ * not use {@link AbstractModifiesCase}.
+ *
+ * <p>State: the module and the name of the program being visited, and the symbol table it is
+ * given, in which {@code visit(JDynAlloyModule)} declares {@code thiz} and
+ * {@code visit(JProgramDeclaration)} the parameters, each in a scope of its own. Reads
+ * {@code JDynAlloyConfig.getInstance()}. No static state.
+ */
 public class ReplaceModifiesModuleVisitor extends JDynAlloyVisitor {
 
 	private JDynAlloyBinding dynJAlloyBinding;
@@ -86,6 +107,12 @@ public class ReplaceModifiesModuleVisitor extends JDynAlloyVisitor {
 	}
 
 	
+	/**
+	 * Creates a visitor without bindings or symbol table. Unused; {@link #visit(JDynAlloyModule)}
+	 * would fail on the missing symbol table.
+	 *
+	 * @param isJavaArith passed to {@code JDynAlloyVisitor}
+	 */
 	public ReplaceModifiesModuleVisitor(boolean isJavaArith) {
 		super(isJavaArith);
 	}
@@ -93,6 +120,15 @@ public class ReplaceModifiesModuleVisitor extends JDynAlloyVisitor {
 
 
 	//We assume a modifies clause is followed by a list containing class fields and method parameter's attributes (param.field). 
+	/**
+	 * Creates the visitor that {@code ModifiesSolverManager} uses.
+	 *
+	 * @param dynJAlloyBinding stored, never read (TACO passes null)
+	 * @param symbolTable the fields of all the modules; the visitor declares variables in it
+	 * @param methodUnderAnalysisName not used: {@link #visit(JDynAlloyModule)} replaces it with the
+	 *        id of each program before visiting it
+	 * @param isJavaArith passed to {@code JDynAlloyVisitor}
+	 */
 	public ReplaceModifiesModuleVisitor(JDynAlloyBinding dynJAlloyBinding, SymbolTable symbolTable, String methodUnderAnalysisName, boolean isJavaArith) {
 		super(isJavaArith);
 		this.dynJAlloyBinding = dynJAlloyBinding;
@@ -117,6 +153,29 @@ public class ReplaceModifiesModuleVisitor extends JDynAlloyVisitor {
 	}
 
 
+	/**
+	 * Returns the specification case with its frame conditions as one more {@code ensures}, or the
+	 * case itself when there are none to add. Reached only from {@link #visit(JProgramDeclaration)},
+	 * which in practice visits no specification case.
+	 * <ul>
+	 * <li>With no clause, or with one that modifies everything, returns {@code node}.</li>
+	 * <li>Each clause must be {@code v.f} or {@code arrayAccess(v.f, ...)}, with {@code v} a
+	 *     variable; {@code f} is recorded as modifiable for {@code v}.</li>
+	 * <li>For each parameter {@code p} of the programs with the id being visited (all the overloads),
+	 *     and each receiver {@code v} whose name contains {@code p}'s name as a substring, it adds
+	 *     the conjunction of {@code p.g = p.g'} over the fields {@code g} declared in the module of
+	 *     {@code p}'s type (not inherited ones) that are not modifiable for {@code p} and do not
+	 *     start with {@code SK_jml_pred_java_primitive}.</li>
+	 * </ul>
+	 * The result is a new {@code JSpecCase} with the same {@code requires} and {@code modifies}. It
+	 * removes {@code null} from the type of each such parameter in place
+	 * ({@code JType.setAsNonNull()}), so the program's declaration changes too.
+	 *
+	 * @param node the specification case
+	 * @return a new case, or {@code node}
+	 * @throws JDynAlloyException for a clause of another form ("Modifies expression ... not
+	 *         supported." or "... includes a non-supported function.")
+	 */
 	@Override
 	public Object visit(JSpecCase node) {
 		boolean modifiesEverything = false;
@@ -385,6 +444,19 @@ public class ReplaceModifiesModuleVisitor extends JDynAlloyVisitor {
 		return n;
 	}
 
+	/**
+	 * Returns a new module with the parts of {@code node} (the same objects, not copies) and its
+	 * programs visited, in a new {@code HashSet}. Before it visits each program it sets the name of
+	 * the program being visited to the program's id; for the visit it declares {@code thiz}, of the
+	 * module's type, in a new scope of the symbol table. When {@code node} has a class singleton, the
+	 * new module's literal singleton is set to it, and then back to {@code node}'s literal singleton
+	 * if there is one; so a module with a class singleton and no literal singleton gets its class
+	 * singleton as literal singleton too. Modules built with {@code DynJMLAlloyModuleBuffer}, as
+	 * TACO's classes are, have no class singleton.
+	 *
+	 * @param node the module
+	 * @return the new module
+	 */
 	@Override
 	public Object visit(JDynAlloyModule node) {
 
@@ -423,6 +495,20 @@ public class ReplaceModifiesModuleVisitor extends JDynAlloyVisitor {
 		return n;
 	}
 
+	/**
+	 * For the method under analysis, returns a new program with the same parts and its
+	 * specification cases visited ({@link #visit(JSpecCase)}), with its parameters (but the first,
+	 * {@code thiz}, of an instance program) declared in a new scope of the symbol table; for any
+	 * other program, the program itself. The method under analysis is the program with
+	 * {@code methodToCheck.startsWith(<signature>_<program>_)}, for the configuration's
+	 * {@code methodToCheck}. With TACO's names {@code <program>} already starts with
+	 * {@code <signature>_} and {@code methodToCheck} is {@code <program>(<types>)}, so no program
+	 * matches (docs/NAMING.md; docs/KNOWN-LIMITATIONS.md, "{@code modifies} clauses add no frame
+	 * conditions").
+	 *
+	 * @param node the program
+	 * @return the new program, or {@code node}
+	 */
 	@Override
 	public Object visit(JProgramDeclaration node) {
 

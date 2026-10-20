@@ -40,12 +40,31 @@ import ar.uba.dc.rfm.alloy.ast.formulas.NotFormula;
 import ar.uba.dc.rfm.alloy.ast.formulas.QuantifiedFormula;
 import ar.uba.dc.rfm.alloy.ast.formulas.QuantifiedFormula.Operator;
 
+/**
+ * The {@link AbstractModifiesCase} for a field: a clause whose location is a variable {@code f},
+ * read as {@code thiz.f}, or a join that ends in one, {@code o.f}. For {@code o.f} it builds
+ * {@code all mod_q_<n>: T | !(mod_q_<n>.f = mod_q_<n>.f') implies mod_q_<n> = o'}, where
+ * {@code T} is the type of {@code o} and {@code o'} is {@code o} with every variable primed: an
+ * object of that type whose {@code f} changes is {@code o}. It never runs (see
+ * {@link AbstractModifiesCase}).
+ *
+ * <p>Static state: the counter that numbers the quantified variables {@code mod_q_<n>} is shared
+ * by all instances and never reset, so the names would differ from one run to the next in one
+ * JVM.
+ */
 public class FieldModifiesCase extends AbstractModifiesCase {
 
 	public FieldModifiesCase(SymbolTable symbolTable) {
 		super(symbolTable);
 	}
 
+	/**
+	 * Returns true for a location that is a variable, or a join whose right side is a variable (the
+	 * left side is not checked); false for a clause that modifies everything.
+	 *
+	 * @param modifies the clause
+	 * @return whether this case handles it
+	 */
 	@Override
 	public boolean accepts(JModifies modifies) {
 		if (modifies.isModifiesEverything()) {
@@ -72,6 +91,13 @@ public class FieldModifiesCase extends AbstractModifiesCase {
 		return false;
 	}
 
+	/**
+	 * Builds the formula of the class comment; a location without a join gets {@code thiz} as
+	 * receiver. Adds the field to {@link #getModifiableFieldSet()} and advances the static counter.
+	 *
+	 * @param modifies a clause this case accepts
+	 * @return the formula
+	 */
 	@Override
 	public AlloyFormula generateFormula(JModifies modifies) {
 		ExprJoin location;
@@ -139,6 +165,16 @@ public class FieldModifiesCase extends AbstractModifiesCase {
 	private static final String MODIFIES_QUANTIFIER_VARIABLE = "mod_q";
 	private static int quantifiersCount = 0;
 
+	/**
+	 * Builds the formula of the class comment for {@code leftPart.fieldName}, with a new quantified
+	 * variable; advances the static counter.
+	 *
+	 * @param leftPart the receiver {@code o}
+	 * @param leftPartType its type; {@code dpdTypeNameExtract()} gives the signature the variable
+	 *        ranges over
+	 * @param fieldName the field
+	 * @return the formula
+	 */
 	protected AlloyFormula modifiableFieldSupport(AlloyExpression leftPart, JType leftPartType,String fieldName) {
 		String modifiesVarName = MODIFIES_QUANTIFIER_VARIABLE + "_" + quantifiersCount;
 		quantifiersCount++;

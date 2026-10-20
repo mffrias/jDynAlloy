@@ -49,3 +49,35 @@ Points where the code does not say what was intended, for the maintainer
    appended, in any module. Nothing in jDynAlloy or TACO creates such names. Which fields get
    the suffix, and is the fallback still needed? (When the receiver's own module has the `_0`
    field, the code returns the lookup of the original name, i.e. null.)
+10. **What the relevancy analysis skips** (`relevancy/RelevancyAnalysisManager.java`,
+    `relevancyAnalysisIterationModule`, lines 263-344; `RelevancyAnalysisStatementVisitor`):
+    object and class constraints are not analysed, and loop invariants are not visited (no
+    `visit(JLoopInvariant)`), although the translation uses both. Intended?
+11. **The static `javaArithmetic` and `bitWidth`** (`RelevancyAnalysisManager.java:66`,
+    `setJavaArithmetic`; `RelevancyAnalysisUtils.java:51`, `setBitWidth`): `javaArithmetic` only
+    reaches `FieldCollectorVisitor.setJavaArithmetic` (line 465), whose flag nothing reads (the
+    analysis uses `process`'s `isJavaArith` argument), and `bitWidth` is only read in
+    `processCollectedFunctionNames` (531) behind a test that is always false (it asks a list of
+    `FunctionCallAlloyFormulaDescriptor`s whether it contains a `String`). Why are they static,
+    are they still needed, and should the `JavaPrimitiveIntegerLiteral` modules for
+    `fun_java_primitive_integer_value_size_of` be added?
+12. **Functions in specifications** (`RelevancyAnalysisUtils.java`, `analyzeFormula`, and
+    `findCalledProgramAndToScene`, 270-275): `BindingManager` binds no function calls (the
+    `ExprFunction` variant of `processIProgramCallSupport` in `SemanticCheckVisitor` is commented
+    out), so a function in a specification is resolved only if some `call` statement has the same
+    name and arguments. Should functions in specifications be bound?
+13. **Invariants that reach programs through functions** (`RelevancyAnalysisUtils.java:459`,
+    `analyzeObjectInvariant`): a copy of `analyzeFormula` without the function-call lookup, so
+    such programs are not added. Intended?
+14. **Fields in the scene** (`relevancy/Scene.java:113`, `addField`): nothing calls it, so the
+    manager's step for field elements (`RelevancyAnalysisManager.java:168-170`) never runs. Were
+    fields meant to be elements of the analysis?
+15. **The `modifies` cases** (`modifies/AbstractModifiesCase.java`, `FieldModifiesCase`,
+    `FieldArraysModifiesCase`): `ReplaceModifiesModuleVisitor.visit(JSpecCase)` creates both
+    cases (147-149) but uses them only in `processJModifies` (315), whose one call (213) is
+    commented out. Are they still meant to be used? (See KNOWN-LIMITATIONS, "`modifies` clauses
+    add no frame conditions".)
+16. **`setLiteralSingleton` with the class singleton**
+    (`modifies/ReplaceModifiesModuleVisitor.java:408-410`): a module with a class singleton gets
+    it as its literal singleton. Was `setClassSingleton` meant? (No effect today: TACO's modules
+    have no class singleton, `useClassSingletons` being false.)

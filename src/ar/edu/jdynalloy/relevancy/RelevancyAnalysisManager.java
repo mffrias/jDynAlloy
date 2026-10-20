@@ -51,6 +51,41 @@ import ar.uba.dc.rfm.alloy.ast.expressions.AlloyExpression;
 import ar.uba.dc.rfm.alloy.ast.formulas.AlloyFormula;
 import ar.uba.dc.rfm.alloy.ast.formulas.PredicateFormula;
 
+/**
+ * Finds what the method under analysis can reach: the relevancy analysis, step 2 of TACO's
+ * {@code JDynAlloyStage}. TACO runs it only with {@code relevancyAnalisys}, after
+ * {@code BindingManager.execute()} and before {@code SceneSlicerManager}, which slices the modules
+ * to what the {@link Scene} of this analysis holds (docs/ARCHITECTURE.md, "How TACO calls it").
+ *
+ * <p>{@link #process} starts the scene with the method under analysis, the module of
+ * {@code classToCheck}, the modules pinned for Stryker
+ * ({@code pinnedForNonRelevancyAnalysisForStryker}; TACO pins the literal modules of a fixed
+ * input) and the module {@code ClassFields}. Then it analyses each element of the scene once,
+ * programs before modules, until every element has been analysed, and adds to the scene what each
+ * analysis reaches. Nothing is ever removed.
+ * <ul>
+ * <li>A program: the types of its parameters and of the variables for the arithmetic of its
+ *     contracts, its {@code requires} and {@code ensures}, its body
+ *     ({@link RelevancyAnalysisStatementVisitor}) and the predicates for that arithmetic. The body
+ *     of every program in the scene is analysed, not only that of the method under analysis
+ *     (docs/KNOWN-LIMITATIONS.md, "Other").</li>
+ * <li>A module: the module of its superclass, the facts of its signature, its {@code represents}
+ *     clauses, its object invariants (and their arithmetic predicates) and class invariants, the
+ *     types of its fields, and the modules that some built-in modules need
+ *     ({@code JavaPrimitiveCharValue} for {@code java_lang_CharArray}, for example). Its programs
+ *     are not analysed: a program is reached only through a call.</li>
+ * </ul>
+ * Formulas go through {@link RelevancyAnalysisUtils#analyzeFormula}, which adds the programs they
+ * call and the modules of the types they mention. Unclear: object and class constraints are not
+ * analysed, and neither are loop invariants ({@link RelevancyAnalysisStatementVisitor}), although
+ * the translation uses them; whether that is intended is an open question.
+ *
+ * <p>Static state: {@code javaArithmetic} (see {@link #setJavaArithmetic(boolean)}) keeps its
+ * value between runs in one JVM, and {@link #process} sets the static {@code bitWidth} of
+ * {@link RelevancyAnalysisUtils}. TACO sets the first before every run, {@code process} sets the
+ * second in every run, and neither changes the result (see the two setters; docs/ARCHITECTURE.md,
+ * "State that outlives a run"). The rest is per instance; TACO creates one instance per run.
+ */
 public class RelevancyAnalysisManager {
 	private static Logger log = Logger
 			.getLogger(RelevancyAnalysisManager.class);
@@ -65,6 +100,13 @@ public class RelevancyAnalysisManager {
 
 	private static boolean javaArithmetic;
 
+	/**
+	 * Sets the bit width that {@link #process} passes to the static
+	 * {@link RelevancyAnalysisUtils#setBitWidth(int)} before it analyses each program. TACO passes
+	 * its {@code bitwidth}. The default is 0.
+	 *
+	 * @param bw the bit width
+	 */
 	public void setBitWidth(int bw){
 		this.bitWidth = bw;
 	}
@@ -73,10 +115,49 @@ public class RelevancyAnalysisManager {
 		return this.javaArithmetic;
 	}
 
+	/**
+	 * Sets the static {@code javaArithmetic} flag, which all instances share and which keeps its
+	 * value for later runs in the same JVM. {@link #process} only passes it to the
+	 * {@code FieldCollectorVisitor} that fills its symbol table, whose flag of that name nothing
+	 * reads; the analysis itself uses the {@code isJavaArith} argument of {@code process}. TACO sets
+	 * both from {@code useJavaArithmetic}. Unclear: why the flag is static, and whether it is still
+	 * needed next to that argument.
+	 *
+	 * @param b true with Java arithmetic
+	 */
 	public void setJavaArithmetic(boolean b){
 		this.javaArithmetic = b;
 	}
 
+	/**
+	 * Runs the relevancy analysis (see the class comment) and returns the ids of the modules it
+	 * reached; the scene stays available through {@link #getScene()}.
+	 *
+	 * <p>Assumes that {@code JDynAlloyConfig.getInstance()} is set, with {@code classToCheck} and the
+	 * typed {@code methodToCheck}: the method under analysis is the program of module
+	 * {@code classToCheck} whose {@code <program>(<parameter types>)} equals {@code methodToCheck}
+	 * ({@link RelevancyAnalysisUtils#findMethodToCheckDeclaration}; docs/NAMING.md, "Where the method
+	 * under analysis is looked up"). Assumes also that {@code dynJAlloyBinding} was built by
+	 * {@code BindingManager.execute()} on these modules: calls are looked up in it by equality, and a
+	 * call it lacks stops the analysis. Builds its own symbol table with the fields of all the
+	 * modules ({@code FieldCollectorVisitor}). The modules are not changed.
+	 *
+	 * @param modules every module of the run
+	 * @param dynJAlloyBinding the bindings of the same modules
+	 * @param isJavaArith true with Java arithmetic; passed to the symbol table and the visitors
+	 * @return the ids of the modules in the scene, separated by {@code ", "}, in no particular order
+	 *         (they go through a {@code HashSet}). TACO stores the string as {@code relevantClasses}
+	 * @throws JDynAlloyException if the method under analysis is not found ("The method to check
+	 *         was not found"; a plain {@code JDynAlloyException}, where {@code ModifiesSolverManager}
+	 *         throws a {@code MethodToCheckNotFoundException}), if a type it meets is not
+	 *         {@code boolean}, {@code Int}, {@code univ} or the id of a module or of its literal
+	 *         signature ("Module '...' not found."), if a module that a built-in module needs is
+	 *         missing ("Module JavaPrimitiveCharValue not found.", ...), if a {@code callSpec} has no
+	 *         binding ("Binding not found for: null"), or if a function called in a specification is
+	 *         neither bound nor known ("Program ... called in specification cannot be found.")
+	 * @throws IllegalArgumentException if a {@code call} statement has no binding: the scene rejects
+	 *         the null program ("Argument must not be null")
+	 */
 	public String process(List<JDynAlloyModule> modules,
 			JDynAlloyBinding dynJAlloyBinding, boolean isJavaArith) {		
 		this.dynJAlloyBinding = dynJAlloyBinding;
@@ -479,6 +560,12 @@ public class RelevancyAnalysisManager {
 		return symbolTable;
 	}
 
+	/**
+	 * Returns the scene of the last {@link #process}: the programs and modules it reached. TACO
+	 * passes it to {@code SceneSlicerManager.process}, which keeps only the programs in it.
+	 *
+	 * @return the scene, or null before {@code process} has run
+	 */
 	public Scene getScene() {
 		return scene;
 	}

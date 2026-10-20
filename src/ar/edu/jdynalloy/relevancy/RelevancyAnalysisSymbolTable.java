@@ -26,6 +26,15 @@ import ar.edu.jdynalloy.binding.symboltable.SymbolTable;
 import ar.edu.jdynalloy.xlator.JType;
 import ar.uba.dc.rfm.alloy.VariableId;
 
+/**
+ * The symbol table of the relevancy analysis: a {@code SymbolTable} that, while recording is
+ * enabled, also collects the types of the variables declared and of the fields looked up
+ * ({@link #getRelevantTypes()}). {@link RelevancyAnalysisUtils#analyzeFormula} replaces the set,
+ * enables recording for the visit of a formula and disables it after, and then adds the modules
+ * of the recorded types to the scene. Recording starts enabled; what is recorded before the first
+ * formula is discarded when that formula replaces the set. One instance per
+ * {@code RelevancyAnalysisManager.process}; no static state.
+ */
 public class RelevancyAnalysisSymbolTable extends SymbolTable {
 
 	private Set<JType> relevantTypes = new HashSet<JType>();
@@ -44,6 +53,14 @@ public class RelevancyAnalysisSymbolTable extends SymbolTable {
 		this.enableRelevantAnalysis = enableRelevantAnalysis;
 	}
 
+	/**
+	 * Declares the variable as {@code SymbolTable.insertLocal} does and, while recording is enabled,
+	 * adds its type to {@link #getRelevantTypes()}.
+	 *
+	 * @param variableId the variable
+	 * @param type its type
+	 * @throws ar.edu.jdynalloy.JDynAlloySemanticException if a scope already declares the variable
+	 */
 	@Override
 	public void insertLocal(VariableId variableId, JType type) {
 		super.insertLocal(variableId, type);
@@ -53,6 +70,15 @@ public class RelevancyAnalysisSymbolTable extends SymbolTable {
 
 	}
 
+	/**
+	 * Returns the type of a field as {@code SymbolTable.lookupField} does and, while recording is
+	 * enabled, adds it to {@link #getRelevantTypes()}.
+	 *
+	 * @param moduleName the id of the module of the receiver, or null for any module
+	 * @param fieldName the field's name
+	 * @return the field's type
+	 * @throws ar.edu.jdynalloy.JDynAlloySemanticException if no field is found
+	 */
 	@Override
 	public JType lookupField(String moduleName, String fieldName) {
 		JType type = super.lookupField(moduleName, fieldName);

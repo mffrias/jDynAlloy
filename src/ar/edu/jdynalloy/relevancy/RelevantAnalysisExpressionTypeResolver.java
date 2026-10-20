@@ -16,6 +16,16 @@ import ar.uba.dc.rfm.alloy.ast.expressions.ExprFunction;
 import ar.uba.dc.rfm.alloy.ast.expressions.ExprVariable;
 import ar.uba.dc.rfm.alloy.ast.formulas.FormulaVisitor;
 
+/**
+ * The expression visitor of the relevancy analysis: an {@code ExpressionTypeResolver} that, while
+ * it types the expressions of a formula, records the types of the constants other than
+ * {@code null}, {@code univ}, {@code Int}, {@code boolean} and {@code none}
+ * ({@link #getRelevantTypes()}), and every function call, with the types of its arguments and of
+ * its result ({@link #getCalledFunctions()}). {@link RelevancyAnalysisUtils#analyzeFormula}
+ * creates one per formula and installs it in a {@code PredicateAndFunctionCallRelevancyVisitor},
+ * which copies the function calls recorded so far at each predicate formula; then it adds the
+ * modules of the constants' types to the scene. No static state.
+ */
 public class RelevantAnalysisExpressionTypeResolver extends
 		ExpressionTypeResolver {
 
@@ -23,6 +33,14 @@ public class RelevantAnalysisExpressionTypeResolver extends
 	
 	private Set<FunctionCallAlloyFormulaDescriptor> functionsCollected = new HashSet<FunctionCallAlloyFormulaDescriptor>();
 
+	/**
+	 * Creates a resolver for one formula.
+	 *
+	 * @param formulaVisitor the formula visitor that uses it; it must be a
+	 *        {@code PredicateAndFunctionCallRelevancyVisitor}, to which {@code visit(ExprFunction)}
+	 *        casts it to get its symbol table
+	 * @param symbolTable the analysis's table
+	 */
 	public RelevantAnalysisExpressionTypeResolver(
 			FormulaVisitor formulaVisitor, SymbolTable symbolTable) {
 		super(formulaVisitor, symbolTable);
@@ -46,6 +64,18 @@ public class RelevantAnalysisExpressionTypeResolver extends
 	}
 	
 	
+	/**
+	 * Records the call, with the types of its arguments and of its result (each computed by a new
+	 * {@code ExpressionTypeResolver} on the formula visitor's symbol table), visits each argument
+	 * with this resolver, and returns the type of the call. {@code ExpressionTypeResolver}'s visit
+	 * then visits the arguments again, so a call nested in another is recorded twice, and one nested
+	 * d levels deep {@code 2^d} times.
+	 *
+	 * @param fc the function call
+	 * @return its type, as {@code ExpressionTypeResolver} computes it
+	 * @throws ClassCastException if the formula visitor is not a
+	 *         {@code PredicateAndFunctionCallRelevancyVisitor}
+	 */
 	public Object visit(ExprFunction fc){
 		List<JType> argumentsTypeList = new ArrayList<JType>();
 		ExpressionTypeResolver expressionTypeResolver;

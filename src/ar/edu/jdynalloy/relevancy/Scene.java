@@ -32,6 +32,21 @@ import ar.edu.jdynalloy.xlator.JType;
 import ar.uba.dc.rfm.alloy.ast.expressions.ExprVariable;
 import ar.uba.dc.rfm.alloy.ast.formulas.AlloyFormula;
 
+/**
+ * What the relevancy analysis has reached: lists of programs, modules and fields, each in the
+ * order added and without duplicates ({@code equals}: {@code JDynAlloyModule} and
+ * {@code JProgramDeclaration} compare by value). {@link RelevancyAnalysisManager} fills it and
+ * works through it until every element has been analysed. TACO gets it with
+ * {@code RelevancyAnalysisManager.getScene()} and passes it to {@code SceneSlicerManager.process},
+ * which keeps the programs in {@link #getPrograms()}; the modules it keeps come from the ids that
+ * {@code RelevancyAnalysisManager.process} returns.
+ *
+ * <p>Nothing calls {@link #addField}, so the list of fields is always empty: fields are reached
+ * through their modules. Unclear: whether fields were meant to be elements of the analysis, as
+ * {@code RelevancyAnalysisManager}'s step for them suggests. The copy constructor,
+ * {@link #assignation}, {@code equals} and {@code hashCode} have no callers. The getters return
+ * unmodifiable views. No static state.
+ */
 public class Scene {
 
 	private List<JProgramDeclaration> programs;
@@ -90,6 +105,12 @@ public class Scene {
 	
 	
 	
+	/**
+	 * Adds a module, unless the scene has an equal one.
+	 *
+	 * @param module the module
+	 * @throws IllegalArgumentException if {@code module} is null ("Argument must not be null")
+	 */
 	public void addModule(JDynAlloyModule module) {
 		if (module == null) {
 			throw new IllegalArgumentException("Argument must not be null");
@@ -100,6 +121,13 @@ public class Scene {
 		}
 	}
 
+	/**
+	 * Adds a program, unless the scene has an equal one. A {@code call} statement that the binding
+	 * does not resolve ends here, as a null program.
+	 *
+	 * @param program the program
+	 * @throws IllegalArgumentException if {@code program} is null ("Argument must not be null")
+	 */
 	public void addProgram(JProgramDeclaration program) {
 		if (program == null) {
 			throw new IllegalArgumentException("Argument must not be null");

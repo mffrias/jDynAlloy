@@ -36,6 +36,18 @@ import ar.uba.dc.rfm.alloy.ast.formulas.NotFormula;
 import ar.uba.dc.rfm.alloy.ast.formulas.QuantifiedFormula;
 import ar.uba.dc.rfm.alloy.ast.formulas.QuantifiedFormula.Operator;
 
+/**
+ * The {@link AbstractModifiesCase} for the contents of an array: a clause whose location is
+ * {@code arrayAccess(<contents>, <array>, <index>)}. It builds
+ * {@code all mod_array_q_<n>: A | !(mod_array_q_<n>.<contents>' = mod_array_q_<n>.<contents>)
+ * implies mod_array_q_<n> = <array>}: an array whose contents change is {@code <array>}. The index
+ * is not used, and {@code A} is {@code java_lang_IntArray}, {@code java_lang_LongArray} or
+ * {@code java_lang_CharArray} when the text of {@code <array>} contains that name, and
+ * {@code java_lang_ObjectArray} otherwise. It never runs (see {@link AbstractModifiesCase}).
+ *
+ * <p>Static state: the counter that numbers the quantified variables {@code mod_array_q_<n>} is
+ * shared by all instances and never reset.
+ */
 public class FieldArraysModifiesCase extends AbstractModifiesCase {
 	
 	private static final String MODIFIES_QUANTIFIER_VARIABLE = "mod_array_q";
@@ -55,6 +67,12 @@ public class FieldArraysModifiesCase extends AbstractModifiesCase {
 		return acceptLocation(modifies.getLocation());
 	}
 
+	/**
+	 * Builds the formula of the class comment and advances the static counter.
+	 *
+	 * @param modifies a clause this case accepts
+	 * @return the formula
+	 */
 	@Override
 	public AlloyFormula generateFormula(JModifies modifies) {
 		// This ExprFormula should be: arrayAccess(Object_Array, variableName, index)

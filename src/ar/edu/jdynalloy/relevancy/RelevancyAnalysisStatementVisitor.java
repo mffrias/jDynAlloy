@@ -42,6 +42,19 @@ import ar.uba.dc.rfm.alloy.ast.formulas.AlloyFormula;
 import ar.uba.dc.rfm.alloy.ast.formulas.EqualsFormula;
 import ar.uba.dc.rfm.alloy.ast.formulas.PredicateFormula;
 
+/**
+ * Analyses the body of a program for the relevancy analysis: {@link RelevancyAnalysisManager}
+ * runs it on the body of each program in the scene, and it adds to the {@link Scene} what the
+ * statements reach. The results of the visits are {@code JDynAlloyVisitor}'s and are not used.
+ *
+ * <p>The conditions of {@code assert}, {@code assume}, {@code if} and {@code while}, assignments
+ * (as the formula {@code lvalue = rvalue}) and {@code havoc} expressions go through
+ * {@link RelevancyAnalysisUtils#analyzeFormula}; a {@code call} adds its program and has its
+ * arguments analysed; {@code createObject} and variable declarations add the modules of their
+ * types. A variable declaration also declares the variable in the symbol table, in the scope of
+ * its block: each block opens a scope. Loop invariants are not analysed: {@code JDynAlloyVisitor}
+ * visits them and does nothing (see {@link RelevancyAnalysisManager}). No static state.
+ */
 public class RelevancyAnalysisStatementVisitor extends JDynAlloyVisitor {
 	Scene scene;
 	JDynAlloyBinding dynJAlloyBinding;
@@ -56,6 +69,14 @@ public class RelevancyAnalysisStatementVisitor extends JDynAlloyVisitor {
 		this.scene = scene;
 	}
 
+	/**
+	 * Analyses the condition, and adds the module {@code java_lang_AssertionError} if there is one: a
+	 * failed {@code assert} assigns {@code java_lang_AssertionErrorLit} to {@code throw}
+	 * (docs/ARCHITECTURE.md, "JDynAlloyXlatorVisitor: modules, programs, statements").
+	 *
+	 * @param node the assert
+	 * @return {@code JDynAlloyVisitor}'s result
+	 */
 	@Override
 	public Object visit(JAssert node) {
 		RelevancyAnalysisUtils.analyzeFormula(scene, node.getCondition(), symbolTable, dynJAlloyBinding, modules);
@@ -105,6 +126,15 @@ public class RelevancyAnalysisStatementVisitor extends JDynAlloyVisitor {
 		return super.visit(node);
 	}
 
+	/**
+	 * Adds the program the call is bound to, and analyses the call as the predicate formula
+	 * {@code <program>[<arguments>]}, for the types and calls in its arguments.
+	 *
+	 * @param node the call
+	 * @return {@code JDynAlloyVisitor}'s result
+	 * @throws IllegalArgumentException if the binding has no program for the call ("Argument must not
+	 *         be null")
+	 */
 	@Override
 	public Object visit(JProgramCall node) {
 		JProgramDeclaration programDeclaration = this.dynJAlloyBinding.resolve(node);

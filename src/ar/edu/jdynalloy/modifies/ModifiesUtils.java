@@ -26,6 +26,12 @@ import ar.uba.dc.rfm.alloy.ast.expressions.ExprVariable;
 import ar.uba.dc.rfm.alloy.ast.formulas.AlloyFormula;
 import ar.uba.dc.rfm.alloy.ast.formulas.EqualsFormula;
 
+/**
+ * Builds the frame condition {@code r.f = r.f'}: the field {@code f} of {@code r} keeps its value
+ * (the primed variable is the value after the program). Used by {@link FieldModifiesCase} and by
+ * an unused private method of {@link ReplaceModifiesModuleVisitor}; neither runs (see
+ * {@link AbstractModifiesCase}). No state.
+ */
 public class ModifiesUtils {
 	
 	/**
@@ -38,6 +44,14 @@ public class ModifiesUtils {
 		
 	}
 	
+	/**
+	 * Returns {@code reciberName.variableName = reciberName.variableName'}: only the field is primed,
+	 * not the receiver.
+	 *
+	 * @param reciberName the receiver variable
+	 * @param variableName the field
+	 * @return the equality
+	 */
 	public static AlloyFormula createFormulaFieldValueEqualsToOldFieldValue(String reciberName, String variableName) {
 		AlloyFormula formula;
 		AlloyExpression left = fieldReferenceExpression(reciberName, variableName, false);
@@ -48,6 +62,15 @@ public class ModifiesUtils {
 		return formula;
 	}
 
+	/**
+	 * Returns the join {@code reciberName.variableName}, with the field primed if asked; the receiver
+	 * is never primed (the line that primed it too is commented out).
+	 *
+	 * @param reciberName the receiver variable
+	 * @param variableName the field
+	 * @param primed whether to prime the field
+	 * @return the join
+	 */
 	public static AlloyExpression fieldReferenceExpression(String reciberName, String variableName, boolean primed) {
 		ExprVariable exprVariable = ExprVariable.buildExprVariable(new AlloyVariable(variableName, primed));
 		// ExprVariable reciber = ExprVariable.buildExprVariable(new

@@ -35,6 +35,30 @@ import ar.edu.jdynalloy.binding.fieldcollector.FieldCollectorVisitor;
 import ar.edu.jdynalloy.binding.symboltable.SymbolTable;
 import ar.edu.jdynalloy.xlator.JDynAlloyBinding;
 
+/**
+ * Adds frame conditions to the method under analysis from its {@code modifies} clauses: step 4
+ * of TACO's {@code JDynAlloyStage}, which runs it in every run, with or without the relevancy
+ * analysis: after the slicing, if there is one, and before the bindings are built again for the
+ * translation (docs/ARCHITECTURE.md, "How TACO calls it").
+ *
+ * <p>{@code process} returns a new list with the same modules, except that each module whose id
+ * is {@code classToCheck} is replaced by what {@link ReplaceModifiesModuleVisitor} returns for
+ * it: a new module object, even when nothing in it changed. For that module it collects the
+ * fields of all the modules into a new {@code SymbolTable}, and it checks that one of the
+ * module's programs is the method under analysis: {@code <program>(<parameter types>)} equal to
+ * the configuration's {@code methodToCheck}, compared as in
+ * {@code RelevancyAnalysisUtils.findMethodToCheckDeclaration} (docs/NAMING.md). If none is, it
+ * throws a {@link MethodToCheckNotFoundException} ("The method to check was not found"), after
+ * the visit. In practice no frame condition is added: the visitor's own test for the method under
+ * analysis never matches TACO's names (docs/KNOWN-LIMITATIONS.md, "{@code modifies} clauses add
+ * no frame conditions"; docs/OPEN-QUESTIONS.md, item 2). Reads {@code classToCheck} and
+ * {@code methodToCheck} from {@code JDynAlloyConfig.getInstance()}.
+ *
+ * <p>The {@code dynJAlloyBinding} argument of {@code process} is stored in the visitor and never
+ * read (TACO passes null). {@link #setJavaArithmetic(boolean)}, which TACO does not call, sets
+ * the flag of the symbol table, which only {@code SymbolTable.lookupField} reads; nothing that
+ * runs here calls it. No static state besides the logger; TACO creates one instance per run.
+ */
 public class ModifiesSolverManager {
 	private static Logger log = Logger.getLogger(ModifiesSolverManager.class);
 	private boolean javaArithmetic;

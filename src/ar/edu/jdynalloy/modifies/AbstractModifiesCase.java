@@ -32,9 +32,35 @@ import ar.uba.dc.rfm.alloy.ast.expressions.ExprJoin;
 import ar.uba.dc.rfm.alloy.ast.expressions.ExprVariable;
 import ar.uba.dc.rfm.alloy.ast.formulas.AlloyFormula;
 
+/**
+ * One kind of {@code modifies} location and the frame condition for it: {@link FieldModifiesCase}
+ * for a field ({@code f} or {@code o.f}), {@link FieldArraysModifiesCase} for the contents of an
+ * array ({@code arrayAccess(...)}). A case says whether it {@link #accepts} a clause, and builds
+ * the formula with {@link #generateFormula}.
+ *
+ * <p>None of this runs: {@code ReplaceModifiesModuleVisitor.visit(JSpecCase)} creates one case
+ * of each kind, but uses them only in its private {@code processJModifies}, whose only call is
+ * commented out; it builds its frame conditions itself. Unclear: whether the cases are still
+ * meant to be used. No static state here; each subclass has a static counter.
+ */
 public abstract class AbstractModifiesCase {
 
+	/**
+	 * Returns whether this case handles the clause.
+	 *
+	 * @param modifies the clause
+	 * @return true if {@link #generateFormula} can build its formula; false for a clause that
+	 *         modifies everything
+	 */
 	public abstract boolean accepts(JModifies modifies);
+	/**
+	 * Returns the frame condition for the clause. Call it only for a clause this case
+	 * {@link #accepts}. {@code FieldModifiesCase} also adds the field to
+	 * {@link #getModifiableFieldSet()}; {@code FieldArraysModifiesCase} does not.
+	 *
+	 * @param modifies the clause
+	 * @return the formula
+	 */
 	public abstract AlloyFormula generateFormula(JModifies modifies);
 	private Set<String> modifiableFieldSet;
 	private SymbolTable symbolTable;
@@ -60,6 +86,13 @@ public abstract class AbstractModifiesCase {
 		return modifiableFieldSet;
 	}
 	
+	/**
+	 * Returns the expression with every variable primed, receivers included; constants are kept.
+	 *
+	 * @param expression a variable, a constant, or a join of them
+	 * @return the primed expression
+	 * @throws JDynAlloyNotImplementedYetException for any other expression
+	 */
 	protected AlloyExpression primeExpression(AlloyExpression expression) {
 
 		if (expression instanceof ExprVariable) {

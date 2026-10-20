@@ -38,6 +38,15 @@ import ar.edu.jdynalloy.xlator.JType;
 import ar.uba.dc.rfm.alloy.ast.formulas.AlloyFormula;
 import ar.uba.dc.rfm.alloy.ast.formulas.IProgramCall;
 
+/**
+ * Static helpers of the relevancy analysis ({@link RelevancyAnalysisManager}): finding the method
+ * under analysis and the module of a type, and analysing a formula, which adds to the
+ * {@link Scene} what the formula reaches.
+ *
+ * <p>Static state: {@code bitWidth} ({@link #setBitWidth(int)}), which keeps its value between
+ * runs in one JVM; {@code RelevancyAnalysisManager.process} sets it again in every run, and it
+ * has no effect.
+ */
 public class RelevancyAnalysisUtils {
 
 
@@ -48,6 +57,17 @@ public class RelevancyAnalysisUtils {
 
 	}
 
+	/**
+	 * Sets the static bit width. {@code RelevancyAnalysisManager} calls it before it analyses each
+	 * program. It is read only to choose the {@code JavaPrimitiveIntegerLiteral} modules (those from
+	 * 0 to {@code 2^(bitWidth-1) - 1}) that a formula calling
+	 * {@code fun_java_primitive_integer_value_size_of} needs, but the test for that call is always
+	 * false: it asks a list of {@code FunctionCallAlloyFormulaDescriptor}s whether it contains a
+	 * string. So the value has no effect. Unclear: whether those literal modules are meant to be
+	 * added.
+	 *
+	 * @param bw the bit width (TACO's {@code bitwidth})
+	 */
 	public static void setBitWidth(int bw){
 		bitWidth = bw;
 	}
@@ -76,6 +96,16 @@ public class RelevancyAnalysisUtils {
 		throw new JDynAlloyException("Module '" + moduleId + "' not found.");
 	}
 
+	/**
+	 * Adds to the scene the module of a type: the one whose id, or the id of whose literal signature,
+	 * is {@code type.dpdTypeNameExtract()}. Nothing is added for {@code boolean}, {@code Int} and
+	 * {@code univ}.
+	 *
+	 * @param scene the scene to add to
+	 * @param type the type
+	 * @param modules every module of the run
+	 * @throws JDynAlloyException if no module has that id ("Module '...' not found.")
+	 */
 	static void findModuleAndToScene(Scene scene, JType type,
 			List<JDynAlloyModule> modules) {
 		String moduleName = type.dpdTypeNameExtract();
@@ -87,6 +117,19 @@ public class RelevancyAnalysisUtils {
 		}
 	}
 
+	/**
+	 * Returns the program of the method under analysis: the program of the module
+	 * {@code classToCheck} whose {@code <program>(<parameter types>)} equals the configuration's
+	 * {@code methodToCheck}. The parameter types leave out {@code thiz}, {@code throw},
+	 * {@code return} and the {@code returnVarFromSpecMethodCall} variables, drop {@code null} from
+	 * {@code X+null} and {@code null+X}, and use Java's names for primitive values and their arrays
+	 * ({@code int}, {@code long[]}, ...), as TACO's {@code methodToCheck} does (docs/NAMING.md,
+	 * "Where the method under analysis is looked up"). Reads {@code JDynAlloyConfig.getInstance()}.
+	 *
+	 * @param modules the modules to search
+	 * @return the program
+	 * @throws JDynAlloyException if no program matches ("The method to check was not found")
+	 */
 	public static JProgramDeclaration findMethodToCheckDeclaration(
 			List<JDynAlloyModule> modules) {
 		JProgramDeclaration methodToCheckDeclaration = null;
@@ -192,6 +235,38 @@ public class RelevancyAnalysisUtils {
 
 	}
 
+	/**
+	 * Adds to the scene what a formula reaches. Visits the formula with a
+	 * {@code PredicateAndFunctionCallRelevancyVisitor} and a
+	 * {@link RelevantAnalysisExpressionTypeResolver}, and adds:
+	 * <ul>
+	 * <li>the program bound to each {@code callSpec} or {@code staticCallSpec};</li>
+	 * <li>the modules of the types the symbol table recorded during the visit (bound variables of
+	 *     quantifiers, fields looked up) and of the constants;</li>
+	 * <li>the program of each function call the visitor collected (only those before the last
+	 *     predicate formula: see the visitor's {@code getCalledFunctions()}), looked up as a
+	 *     {@code call} statement with the same name and arguments. A call without a
+	 *     binding is skipped if it is one of a fixed list of functions of the prelude and of the
+	 *     Java-arithmetic modules ({@code add}, {@code arrayLength},
+	 *     {@code fun_java_primitive_integer_value_add}, ...), and is an error otherwise.</li>
+	 * </ul>
+	 * Unclear: {@code BindingManager} binds no function calls (that code is commented out in
+	 * {@code SemanticCheckVisitor}), so a function resolves only if some {@code call} statement has
+	 * the same name and arguments; whether functions in specifications are meant to be bound is an
+	 * open question.
+	 *
+	 * <p>Enables the recording of {@code symbolTable} for the visit and disables it after, and
+	 * replaces its set of relevant types.
+	 *
+	 * @param scene the scene to add to
+	 * @param formula the formula
+	 * @param symbolTable the analysis's table, with the variables in scope
+	 * @param dynJAlloyBinding the bindings
+	 * @param modules every module of the run
+	 * @throws JDynAlloyException as {@link RelevancyAnalysisManager#process} says: "Binding not found
+	 *         for: null", "Module '...' not found.", "Program ... called in specification cannot be
+	 *         found."
+	 */
 	public static void analyzeFormula(Scene scene, AlloyFormula formula,
 			RelevancyAnalysisSymbolTable symbolTable,
 			JDynAlloyBinding dynJAlloyBinding, List<JDynAlloyModule> modules) {
@@ -456,6 +531,19 @@ public class RelevancyAnalysisUtils {
 		scene.addProgram(program);
 	}
 
+	/**
+	 * Adds to the scene what an object invariant reaches: the same as {@link #analyzeFormula}, but
+	 * without the function calls, so a program that the invariant reaches only through a function is
+	 * not added. Unclear: whether leaving out the function calls is intended; the code is otherwise a
+	 * copy of {@code analyzeFormula}.
+	 *
+	 * @param scene the scene to add to
+	 * @param objectInvariant the invariant's formula
+	 * @param symbolTable the analysis's table, with {@code thiz} in scope
+	 * @param dynJAlloyBinding the bindings
+	 * @param modules every module of the run
+	 * @throws JDynAlloyException "Binding not found for: null" or "Module '...' not found."
+	 */
 	public static void analyzeObjectInvariant(Scene scene, AlloyFormula objectInvariant,
 			RelevancyAnalysisSymbolTable symbolTable,
 			JDynAlloyBinding dynJAlloyBinding, List<JDynAlloyModule> modules) {
