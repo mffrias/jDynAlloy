@@ -27,11 +27,39 @@ import ar.uba.dc.rfm.alloy.util.QFtransformer;
 import ar.uba.dc.rfm.alloy.util.VarCollector;
 import ar.uba.dc.rfm.alloy.util.VarSubstitutor;
 
+/**
+ * Wraps formulas into Alloy predicates for {@code JDynAlloyXlatorVisitor}: each wrapped formula gets
+ * a {@link PredicateDeclaration}, which the visitor prints into the Alloy part of the module, and
+ * is replaced by a call to it. The conditions of {@code if}, {@code while}, {@code assert} and
+ * {@code assume} become {@code <Sig>Condition<N>} ({@link #wrapCondition}); the invariants,
+ * abstractions, contracts and the pre- and postcondition of the method under analysis get the names
+ * the visitor gives them ({@link #wrapFormula}, {@link #wrapInvFormula}; docs/NAMING.md, "What it
+ * names").
+ *
+ * <p>The parameters of a predicate are the variables of its formula that have a type: the
+ * parameters and local variables of the program being translated ({@link #bindParameterVariables},
+ * {@link #bindLocalVariables}), the fields of the run, and {@code thiz} and {@code usedObjects} in
+ * any case. Variables without a type, such as those bound by a quantifier, are not parameters. The
+ * parameters are sorted by dynalloy4's {@code AlloyVariableComparator}, and the call passes the
+ * same variables. Their types are loose: {@code univ}, {@code univ->univ},
+ * {@code univ->univ->univ}, {@code Int -> univ} or {@code univ -> (Int -> univ)}, chosen by the
+ * arity of the variable's type and its special type ({@code JType}), never a signature. A primed
+ * variable takes the type of the unprimed one. A pre-state variable {@code v} (dynalloy4's
+ * {@code \pre[v]}, from {@code ModularMutator.PreStateExprMutator}) is {@code v''} inside the
+ * predicate, and the call passes {@code v}.
+ *
+ * <p>One instance per module: the visitor creates it in {@code visit(JDynAlloyModule)} and binds
+ * new parameter and local typings for each program. No static state.
+ */
 final class FormulaWrapper {
 
 	private HashSet<AlloyVariable> varsToPrefix;
 
 
+	/**
+	 * Renames each pre-state variable {@code v} of a formula to {@code v''} and leaves the other
+	 * variables as they are; applied to the body of every predicate.
+	 */
 	static class RenamePreStateVariableMutator extends VarSubstitutor {
 
 		@Override
@@ -52,6 +80,14 @@ final class FormulaWrapper {
 	private JDynAlloyTyping parameterVariables = null;
 	private JDynAlloyTyping localVariables = null;
 
+	/**
+	 * Creates the wrapper of one module.
+	 *
+	 * @param modulePrefix the module's signature id, the prefix of the condition names
+	 * @param fieldsTyping every field of the run with its type ({@code JDynAlloyContext.allFields()})
+	 * @param varsToPrefix stored but not used: the code that prefixed them with {@code QF.} here is
+	 *        commented out
+	 */
 	public FormulaWrapper(String modulePrefix, JDynAlloyTyping fieldsTyping, HashSet<AlloyVariable> varsToPrefix) {
 		super();
 		this.fieldsTyping = fieldsTyping;
@@ -59,10 +95,25 @@ final class FormulaWrapper {
 		this.varsToPrefix = varsToPrefix;
 	}
 
+	/**
+	 * Sets the typing of the current program's parameters, where a variable's type is looked up
+	 * first. The visitor passes an empty typing, which it fills while it visits the program's
+	 * parameter declarations. It must be set before anything is wrapped (a
+	 * {@code NullPointerException} otherwise).
+	 *
+	 * @param _variableTyping the typing, kept, not copied
+	 */
 	public void bindParameterVariables(JDynAlloyTyping _variableTyping) {
 		this.parameterVariables = _variableTyping;
 	}
 
+	/**
+	 * Sets the typing of the current program's local variables, where a variable's type is looked up
+	 * after the parameters. As with {@link #bindParameterVariables}, the visitor fills it during the
+	 * visit, and it must be set before anything is wrapped.
+	 *
+	 * @param _localVariables the typing, kept, not copied
+	 */
 	public void bindLocalVariables(JDynAlloyTyping _localVariables) {
 		this.localVariables = _localVariables;
 	}
@@ -101,6 +152,14 @@ final class FormulaWrapper {
 
 
 
+	/**
+	 * Wraps a formula into a predicate named {@code formulaId} (see the class comment) and returns
+	 * the call to it. A declaration already stored under that id is replaced.
+	 *
+	 * @param formulaId the predicate's name
+	 * @param formula the body
+	 * @return the call, with the formula's typed variables as arguments
+	 */
 	public PredicateFormula wrapFormula(String formulaId, AlloyFormula formula) {
 //		QFtransformer qfprefixer = new QFtransformer(varsToPrefix);
 //		FormulaMutator fm = new FormulaMutator(qfprefixer);
@@ -111,6 +170,21 @@ final class FormulaWrapper {
 	}
 
 
+	/**
+	 * Wraps a module's object invariant, as {@link #wrapFormula} does with two differences in the
+	 * parameters. A variable that comes from a contract ({@code isVariableFromContract}) and has no
+	 * type of its own is a {@code univ} parameter if {@code freeArithVarsInContract} has its
+	 * {@code _0} version or its primed {@code _1} version. And a field whose special type is
+	 * {@code CHAR_ARRAY_CONTAINS} or {@code LONG_ARRAY_CONTAINS} (the contents of {@code char} and
+	 * {@code long} arrays) is not a parameter, while {@code wrapFormula} makes it one: this method's
+	 * choice of type has no case for them.
+	 *
+	 * @param formulaId the predicate's name, {@code <Sig>_object_invariant}
+	 * @param formula the conjunction of the module's object invariants
+	 * @param freeArithVarsInContract the variables of the module's encodings of the arithmetic of
+	 *        its object invariants
+	 * @return the call
+	 */
 	public PredicateFormula wrapInvFormula(String formulaId, AlloyFormula formula, Set<AlloyVariable> freeArithVarsInContract) {
 		Predicate predicate = buildInvPredicate(formulaId, formula, freeArithVarsInContract);
 		newPredicates.put(formulaId, predicate.declaration);
@@ -119,6 +193,15 @@ final class FormulaWrapper {
 
 
 
+	/**
+	 * Wraps a condition into a predicate {@code <modulePrefix>Condition<n>}, with n counted from 0
+	 * in this wrapper, and returns the call to it. A formula equal ({@code equals}) to one wrapped
+	 * before, in any program of the module, gets the earlier call again, with the arguments computed
+	 * then.
+	 *
+	 * @param f the condition
+	 * @return the call
+	 */
 	public PredicateFormula wrapCondition(AlloyFormula f) {
 //		QFtransformer qfprefixer = new QFtransformer(varsToPrefix);
 //		FormulaMutator fm = new FormulaMutator(qfprefixer);

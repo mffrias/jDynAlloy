@@ -31,6 +31,31 @@ import ar.uba.dc.rfm.dynalloy.ast.DynalloyModule;
 
 import static ar.edu.taco.simplejml.builtin.JavaPrimitiveFloatValue.create_literal_signature;
 
+/**
+ * jDynAlloy's entry point for TACO: translates the JDynAlloy modules of one analysis into dynalloy4
+ * {@code DynalloyModule}s. TACO's {@code JDynAlloyToDynAlloyManager.process} creates one per run, in
+ * step 5 of {@code JDynAlloyStage.execute}, after the bindings, the relevancy analysis, the slicing
+ * and the frame conditions, and hands the result to {@link DynAlloyLinker}
+ * (docs/ARCHITECTURE.md, "How TACO calls it").
+ *
+ * <p>{@link #translateAll(JDynAlloyModule[], boolean)} loads the modules into a new
+ * {@link JDynAlloyContext}, prepares them (dynamic dispatch, loop invariants, specification programs
+ * with {@code modularReasoning}, call graph, pruning, recursion unfolding, modifies table), and
+ * translates each one with a {@link JDynAlloyXlatorVisitor}; docs/ARCHITECTURE.md, "The
+ * translation", has the steps in order.
+ *
+ * <p>Assumes that the binding was built by {@code BindingManager.execute()} on the same modules
+ * ({@code VAlloyVisitor} looks every call up in it), that the slicing, if any, already ran (every
+ * module given is translated), and that {@code JDynAlloyConfig.getInstance()} is TACO's
+ * configuration of this run: its {@code relevantClasses} (set by the relevancy analysis when it
+ * runs) are the modules whose invariants go into the pre- and postcondition, and its typed
+ * {@code methodToCheck} names the root of the pruning and the program that gets the assertion
+ * (docs/NAMING.md, "Where the method under analysis is looked up").
+ *
+ * <p>No static state of its own, and the configuration is read, not changed. But with a fixed input
+ * and Java arithmetic the visitors add literals to the static {@code JavaPrimitive*Value}
+ * singletons, which nothing here resets (docs/ARCHITECTURE.md, "State that outlives a run").
+ */
 public final class JDynAlloyTranslator {
 
 	private Object inputToFix = null;
@@ -43,6 +68,15 @@ public final class JDynAlloyTranslator {
 		return removeQuantifiers;
 	}
 
+	/**
+	 * Sets TACO's {@code dynalloy.toAlloy.removeQuantifiers} (which TACO also gives to dynalloy4),
+	 * for the visitors of the relevant modules only: with it, they prefix with {@code QF.} the
+	 * variables of the arithmetic encodings ({@link JDynAlloyXlatorVisitor}). The other modules are
+	 * translated without it. Call it before {@link #translateAll(JDynAlloyModule[], boolean)}; the
+	 * default is false.
+	 *
+	 * @param rq the flag
+	 */
 	public void setRemoveQuantifiers(boolean rq){
 		this.removeQuantifiers = rq;
 	}
@@ -52,6 +86,21 @@ public final class JDynAlloyTranslator {
 		return "//-------------- " + fragmentId + "--------------//" + "\n";
 	}
 
+	/**
+	 * Creates a translator for one run.
+	 *
+	 * @param binding the binding of the modules to translate, with
+	 *        {@code unfoldScopeForRecursiveCode} set (TACO sets its loop-unrolling bound)
+	 * @param classToCheck the class under analysis as TACO's driver gives it, with dots. It goes to
+	 *        the call graphs, where the name it helps build never matches (docs/NAMING.md, "Where
+	 *        the method under analysis is looked up"), and to the visitors, which do not read it
+	 * @param methodToCheck the method under analysis without its parameter types,
+	 *        {@code <package>_<Class>_<method>}: the visitors apply the fixed input to the program
+	 *        with this id. The program that gets the assertion is found with the configuration's
+	 *        {@code classToCheck} and {@code methodToCheck} instead
+	 * @param inputToFix the input to fix, a {@code HashMap<String, Object>} from parameter names
+	 *        ({@code thiz} included) to values, or null (docs/ARCHITECTURE.md, "Fixed input")
+	 */
 	public JDynAlloyTranslator(JDynAlloyBinding binding, String classToCheck, String methodToCheck, Object inputToFix) {
 		super();
 		this.binding = binding;
@@ -60,6 +109,39 @@ public final class JDynAlloyTranslator {
 		this.methodToCheck = methodToCheck;
 	}
 
+	/**
+	 * Translates the modules of one analysis: loads them into a new {@link JDynAlloyContext},
+	 * prepares them and translates each one (see the class comment).
+	 *
+	 * <p>The result has each relevant module (one whose id is in {@code relevantClasses}), each
+	 * followed by the literal modules its visitor asked for, and then the other modules. A literal
+	 * module is made for each {@code JavaPrimitive*Literal} constant that the visitor found in the
+	 * {@code requires} of a specification case (with a fixed input, in the formula that fixes it;
+	 * see {@code JDynAlloyXlatorVisitor.visit(JSpecCase)}) and that is not a relevant module yet: a
+	 * {@code one sig} that extends {@code JavaPrimitiveIntegerValue} (or the long, char or float
+	 * one), with the literal's predicate as its fact; the number in the predicate's name is read
+	 * from the literal's name at a fixed offset (docs/KNOWN-LIMITATIONS.md, "Analysis"). For a
+	 * negative value that gives {@code pred_java_primitive_integer_value_literal_Minus<n>}, while
+	 * the literal's predicate is {@code ..._literal_minus_<n>}, so Alloy rejects the model: this
+	 * happens for negative values reached through the fields of a fixed input (a negative
+	 * literal written in a {@code requires} already has its module; TACO's
+	 * docs/FIXES-FOR-MASTER.md, F15). The new
+	 * module is added to the context's relevant modules, so it is made once, and a module with the
+	 * same id among {@code asts} is then not translated. Only the relevant modules' visitors get the
+	 * flag of {@link #setRemoveQuantifiers(boolean)}.
+	 *
+	 * <p>Side effects: with {@code modularReasoning} and {@code outputModularJDynalloy}, writes the
+	 * modules with their specification programs to that file ({@link #writeDynJAlloyOutput}).
+	 *
+	 * <p>Assumes that the configuration's {@code methodToCheck} has its parameter types in
+	 * parentheses: the pruning takes it up to the {@code (} (a
+	 * {@code StringIndexOutOfBoundsException} without one).
+	 *
+	 * @param asts the modules, after TACO's slicing and frame conditions
+	 * @param isJavaArith true with Java arithmetic (TACO's {@code useJavaArithmetic}), for every
+	 *        visitor
+	 * @return the DynAlloy modules, in the order above
+	 */
 	public Vector<DynalloyModule> translateAll(JDynAlloyModule[] asts, boolean isJavaArith) {
 		Vector<JDynAlloyModule> initial = new Vector<JDynAlloyModule>(Arrays.asList(asts));
 
@@ -308,6 +390,15 @@ public final class JDynAlloyTranslator {
 		return false;
 	}
 
+	/**
+	 * Writes modules as JDynAlloy text ({@link JDynAlloyPrinter}) to one file, each after the line
+	 * {@code //-------------- <signature id>--------------//}. {@code translateAll} uses it for
+	 * {@code outputModularJDynalloy}. An {@code IOException} is printed, not thrown.
+	 *
+	 * @param outputDynJAlloy the path of the file, replaced if it exists
+	 * @param modules the modules
+	 * @param isJavaArith passed to the printer
+	 */
 	public static void writeDynJAlloyOutput(String outputDynJAlloy, JDynAlloyModule[] modules, boolean isJavaArith) {
 		StringBuffer sb = new StringBuffer();
 		for (JDynAlloyModule m : modules) {

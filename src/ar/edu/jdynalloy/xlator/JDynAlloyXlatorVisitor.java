@@ -101,6 +101,106 @@ import ar.uba.dc.rfm.dynalloy.ast.programs.TestPredicate;
 import ar.uba.dc.rfm.dynalloy.ast.programs.WhileProgram;
 import ar.uba.dc.rfm.dynalloy.util.ProgramCloner;
 
+/**
+ * Translates one JDynAlloy module into a dynalloy4 {@code DynalloyModule}: the last step of
+ * {@link JDynAlloyTranslator#translateAll(JDynAlloyModule[], boolean)}, which creates one visitor
+ * per module once the preparation (dynamic dispatch, loop invariants, pruning, recursion unfolding,
+ * modifies table) has run on all of them, and has the same visitor translate the literal modules it
+ * asks for (docs/ARCHITECTURE.md, "The translation" and "JDynAlloyXlatorVisitor: modules, programs,
+ * statements"). {@code module.accept(visitor)} returns the {@code DynalloyModule}.
+ *
+ * <p><b>A module</b> keeps its id. Its Alloy part is text: the signature printed by
+ * {@link JDynAlloyPrinter}; with {@code useClassSingletons}, the class singleton and, with
+ * {@code typeSafety} too, a fact saying that the objects whose class is {@code <Sig>Class} are those
+ * of the signature that are in no subclass (neither of them for the module {@code Class} without
+ * {@code classExtendsObject}); the literal singleton; and the predicates that the module's
+ * {@link FormulaWrapper} declared while its programs were translated. Its programs are the module's,
+ * plus, for the method under analysis, the assertion {@code check_<program>} and the program
+ * {@code simulate_<program>}. Fields are not Alloy fields: every program takes every field of the
+ * context as a parameter, after its own and before {@code usedObjects}, and every call passes them
+ * on. docs/ARCHITECTURE.md lists the DynAlloy form of each statement; every condition becomes a
+ * predicate {@code <Sig>Condition<N>}, and an {@code if} with a branch id labels its two tests.
+ *
+ * <p><b>The method under analysis</b> is the program of the module whose signature is
+ * {@code JDynAlloyConfig}'s {@code getClassToCheck()} and whose id is its {@code getMethodToCheck()}
+ * up to the {@code (} (docs/NAMING.md). Overloads share that id, so every overload in that module
+ * that has specification cases gets an assertion of that name. With specification cases,
+ * {@link #visit(JProgramDeclaration)} builds {@code check_<program>}: {@code precondition_<program>}
+ * and the call imply {@code postcondition_<program>}. dynalloy4 turns it into an Alloy assertion;
+ * TACO's {@code DynalloyStage} adds the {@code check} command and its scopes.
+ * <ul>
+ * <li>Specification cases: with one, its {@code requires} and {@code ensures}; with several, the
+ *     disjunction of the conjunctions of their {@code requires}, and the conjunction of the
+ *     {@code requires_i => ensures_i}. The {@code modifies} are not used here: the frame
+ *     conditions, if any, are added to the {@code ensures} before, by {@code ModifiesSolverManager}
+ *     (docs/KNOWN-LIMITATIONS.md, "Analysis").</li>
+ * <li>Precondition: for each relevant module ({@code JDynAlloyContext.getRelevantModules()}), its
+ *     class invariant {@code <Sig>_class_invariant}, its object invariant
+ *     {@code <Sig>_object_invariant} for all {@code objx} of the signature, and its abstraction
+ *     functions {@code <Sig>_<field>_abstraction} the same way; with
+ *     {@code skolemizeInstanceInvariant} (and {@code skolemizeInstanceAbstraction}), those of the
+ *     class under analysis only for {@code thiz}. Then {@code <Sig>_requires}: the {@code requires}
+ *     and {@code usedObjects} equal to the objects reachable ({@code fun_weak_reach}) from the
+ *     parameters other than {@code throw} and {@code return} and from the static fields, through
+ *     the fields whose values are not all primitive. Last, {@code throw = null}. For a
+ *     constructor, the object invariant of its own class is left out, and with
+ *     {@code skolemizeInstanceInvariant} the other modules' object invariants are taken for
+ *     {@code thiz} only, not for all objects.</li>
+ * <li>Program: the call; then, for each {@code represents} of a relevant module whose formula
+ *     mentions a field that the program may assign (the modifies table), {@code havoc} of the
+ *     abstract field and {@code assume} of the abstraction.</li>
+ * <li>Postcondition: {@code <Sig>_ensures}; then, for each relevant module, its class invariant,
+ *     primed, if the program may assign a field it mentions; its object invariant, primed, for all
+ *     {@code objx'} (for {@code thiz'} under {@code skolemizeInstanceInvariant} in the class under
+ *     analysis), if the program may assign a field mentioned in it or in the arithmetic predicates
+ *     of the module being translated, and always with a fixed input; and its object constraints,
+ *     for all {@code objx}.</li>
+ * </ul>
+ * With {@code includeSimulationProgramDeclaration}, {@code simulate_<program>} assumes the
+ * precondition, runs the program to check and assumes the postcondition, rewritten with pre-state
+ * variables for its unprimed ones and plain variables for its primed ones.
+ *
+ * <p><b>Arithmetic encodings.</b> TACO encodes the arithmetic of object invariants (per module) and
+ * of {@code requires} and {@code ensures} (per program) as variables and predicates kept beside the
+ * formulas. The visitor passes them on to the {@code DynalloyModule} and to each
+ * {@code ProgramDeclaration}, where TACO reads them for its {@code DynalloyStage}; with
+ * {@code removeQuantifiers}, it first prefixes with {@code QF.} the variables given to the
+ * constructor, and writes the prefixed predicates back into the JDynAlloy module and program. In
+ * the invariants of the pre- and postcondition, the variables of the object-invariant encodings of
+ * the module being translated get the suffix {@code _0}, and primed {@code _1}; the arguments of
+ * {@code precondition_<program>} and {@code postcondition_<program>} get {@code QF.} prefixes with
+ * {@code removeQuantifiers} or, for a constructor, always; and object constraints get them always.
+ * The visitor adds no symmetry breaking: TACO adds it later, on the Alloy side (TACO's
+ * docs/ARCHITECTURE.md).
+ *
+ * <p><b>Fixed input.</b> {@code JDynAlloyVisitor.visit(JSpecCase)} applies it to the program whose
+ * id is {@link #getFullyQualifiedMethodName()}, the {@code methodToCheck} given to the constructor
+ * (docs/ARCHITECTURE.md, "Fixed input"); {@link #visit(JSpecCase)} collects the literals it uses for
+ * {@code JDynAlloyTranslator}; and every relevant module's object invariant is re-checked in the
+ * postcondition.
+ *
+ * <p>Reads from {@code JDynAlloyConfig.getInstance()}: {@code classToCheck}, {@code methodToCheck},
+ * {@code useClassSingletons}, {@code classExtendsObject}, {@code typeSafety},
+ * {@code nestedLoopUnroll}, {@code skolemizeInstanceInvariant},
+ * {@code skolemizeInstanceAbstraction}, {@code includeSimulationProgramDeclaration} and
+ * {@code useQualifiedNamesForJTypes}. No static state; but with a fixed input and Java arithmetic
+ * the base class adds literals to the static {@code JavaPrimitive*Value} singletons, which nothing
+ * resets (docs/ARCHITECTURE.md, "State that outlives a run").
+ *
+ * <p>Assumes the modules were prepared by {@code JDynAlloyTranslator} with this context: calls
+ * renamed by {@code VAlloyVisitor} to the ids of the programs they invoke (a call is translated by
+ * its id; the binding is not consulted here), loops with invariants already replaced, and the
+ * modifies table set, with an entry for every program checked. The relevancy analysis and the
+ * slicing are not required, but the relevant modules are those of {@code relevantClasses}, which
+ * TACO sets from the relevancy analysis.
+ *
+ * <p>Unclear: the {@code classToCheck} given to the constructor is never read, and the two
+ * {@code methodToCheck}s, the constructor's for the fixed input and the configuration's for the
+ * assertion, are kept apart; whether both are meant to stay is an open question. Unclear:
+ * {@code usedObjects} is always constrained in the precondition ({@code hasObjectCreation} is set
+ * to true right after {@code ObjectCreationDetector} computes it); whether the detector is still
+ * meant to decide that is an open question.
+ */
 final class JDynAlloyXlatorVisitor extends JDynAlloyVisitor {
 
 	public HashSet<String> getIntsCollected() {
@@ -147,6 +247,20 @@ final class JDynAlloyXlatorVisitor extends JDynAlloyVisitor {
 		return node.getLocation();
 	}
 
+	/**
+	 * Visits a specification case as {@code JDynAlloyVisitor.visit(JSpecCase)} does, which applies
+	 * the fixed input, and adds the names of the literal constants of its {@code requires} to
+	 * {@code intsCollected}, {@code longsCollected}, {@code charsCollected} and
+	 * {@code floatsCollected} (dynalloy4's {@code LiteralCollector}: the {@code JavaPrimitive*Literal}
+	 * constants in predicate calls and equalities), for {@code JDynAlloyTranslator} to create their
+	 * modules. The loop stops at the first null {@code requires} result, and at every index reads the
+	 * first {@code requires}, so the literals are collected from that one only. The results are
+	 * returned as the base class built them.
+	 *
+	 * @param node the specification case
+	 * @return a {@code Vector} of the {@code requires} results, the {@code ensures} results and the
+	 *         {@code modifies} locations
+	 */
 	@Override
 	public Object visit(JSpecCase node) {
 		Vector<Object> v = (Vector<Object>) super.visit(node);
@@ -220,6 +334,22 @@ final class JDynAlloyXlatorVisitor extends JDynAlloyVisitor {
 		return this.varsToPrefix;
 	}
 
+	/**
+	 * Creates the visitor of one module (and of the literal modules {@code JDynAlloyTranslator} adds
+	 * after it).
+	 *
+	 * @param _context the context of the run, with the modifies table set
+	 * @param sav the variables to prefix with {@code QF.} under {@code removeQuantifiers}: those of
+	 *        the module's encodings of the arithmetic of its object invariants and of its programs'
+	 *        encodings of the arithmetic of their contracts ({@code JDynAlloyTranslator} collects
+	 *        them)
+	 * @param inputToFix the input to fix, or null; stored in {@code JDynAlloyVisitor.inputToFix}
+	 * @param isJavaArith true with Java arithmetic (TACO's {@code useJavaArithmetic})
+	 * @param classToCheck stored, never read: the method under analysis is found with the
+	 *        configuration's {@code getClassToCheck()} instead
+	 * @param methodToCheck the id of the program that gets the fixed input
+	 *        ({@link #getFullyQualifiedMethodName()})
+	 */
 	public JDynAlloyXlatorVisitor(JDynAlloyContext _context, HashSet<AlloyVariable> sav, Object inputToFix, boolean isJavaArith, String classToCheck, String methodToCheck) {
 		super(isJavaArith);
 		this.isJavaArith = isJavaArith;		
@@ -240,6 +370,13 @@ final class JDynAlloyXlatorVisitor extends JDynAlloyVisitor {
 		return new HashSet<PredicateDeclaration>(formulaWrapper.getWrapperPredicates().values());
 	}
 
+	/**
+	 * Returns the typing of the current program's parameters only, not that of the DynAlloy
+	 * program, which also has the fields, the local variables and {@code usedObjects}. Nothing calls
+	 * it.
+	 *
+	 * @return the parameter typing of the last program visited, or null before the first
+	 */
 	public JDynAlloyTyping getTyping() {
 		return this.parameterVariables;
 	}
@@ -330,6 +467,15 @@ final class JDynAlloyXlatorVisitor extends JDynAlloyVisitor {
 			throw new IllegalArgumentException();
 	}
 
+	/**
+	 * Translates a {@code while}: with {@code nestedLoopUnroll}, into DynAlloy's {@code while};
+	 * otherwise into {@code (test C; body)*; test !C}. dynalloy4 unrolls both. A loop invariant still
+	 * on the loop is translated (its condition gets a predicate) and then dropped; the preparation
+	 * ({@code JDynAlloyTransformationVisitor}) has already replaced every loop that had one.
+	 *
+	 * @param n the loop
+	 * @return the DynAlloy program
+	 */
 	public Object visit(JWhile n) {
 		Vector<DynalloyProgram> r = (Vector<DynalloyProgram>) super.visit(n);
 
@@ -368,6 +514,14 @@ final class JDynAlloyXlatorVisitor extends JDynAlloyVisitor {
 		return new Skip();
 	}
 
+	/**
+	 * Records a declared variable's type: in the program's parameter typing if it is one of the
+	 * program's parameters, otherwise among the local variables of the DynAlloy program. The
+	 * declaration itself translates to {@code skip}.
+	 *
+	 * @param n the declaration
+	 * @return a {@code Skip}
+	 */
 	@Override
 	public Object visit(JVariableDeclaration n) {
 		if (programParameters.contains(n.getVariable()))
@@ -379,6 +533,21 @@ final class JDynAlloyXlatorVisitor extends JDynAlloyVisitor {
 
 
 
+	/**
+	 * Translates a module (see the class comment) into a {@code DynalloyModule} with the same id. A
+	 * new {@link FormulaWrapper} is made for the module, so condition numbers start at 0 in each.
+	 * With {@code useClassSingletons}, a module without a class singleton gets the text
+	 * {@code null} where the singleton would be.
+	 *
+	 * <p>Side effect: if the module has variables for the arithmetic of its object invariants, its
+	 * list of the predicates for them is replaced with a new one, whose formulas are prefixed with
+	 * {@code QF.} under {@code removeQuantifiers}
+	 * ({@code setPredsEncodingValueOfArithmeticOperationsInObjectInvariants}); the
+	 * {@code DynalloyModule} carries that list and those variables.
+	 *
+	 * @param node the module
+	 * @return the {@code DynalloyModule}
+	 */
 	@Override
 	public Object visit(JDynAlloyModule node) {
 		this.currentModule.push(node);
@@ -517,6 +686,14 @@ final class JDynAlloyXlatorVisitor extends JDynAlloyVisitor {
 
 	private Set<AlloyVariable> programParameters = new HashSet<AlloyVariable>();
 
+	/**
+	 * What {@link JDynAlloyXlatorVisitor#visit(JProgramDeclaration)} returns for one program: the
+	 * DynAlloy program; for the method under analysis with specification cases, the assertion
+	 * {@code check_<program>} and, with {@code includeSimulationProgramDeclaration}, the program
+	 * {@code simulate_<program>} (null otherwise); and the program's predicates for the arithmetic
+	 * of its contracts, which {@code visit(JDynAlloyModule)} puts into the program it adds to the
+	 * module.
+	 */
 	static class ProgramTranslationResult {
 		public ProgramTranslationResult(ProgramDeclaration program, AssertionDeclaration assertion, 
 				ProgramDeclaration simProgram, List<AlloyFormula> preds) {
@@ -540,6 +717,32 @@ final class JDynAlloyXlatorVisitor extends JDynAlloyVisitor {
 		private final List<AlloyFormula> predsFromArithmeticInContracts;
 	}
 
+	/**
+	 * Translates a program into a DynAlloy program and, for the method under analysis with
+	 * specification cases, also builds its assertion and simulation program (see the class
+	 * comment).
+	 *
+	 * <p>The DynAlloy program has the same id. Its parameters are the program's, then every field
+	 * ({@code JDynAlloyContext.fieldList()}), then {@code usedObjects}; its local variables are those
+	 * declared in the body; its typing has all of them, {@code usedObjects} as a set of
+	 * {@code java_lang_Object}; and it carries the program's predicates and variables for the
+	 * arithmetic of its contracts.
+	 *
+	 * <p>Side effects: sets {@code formalParameterNames} (for the fixed input); binds new parameter
+	 * and local typings to the module's {@link FormulaWrapper}, which gets the predicates of the
+	 * conditions and, for the method under analysis, those of the invariants, abstractions,
+	 * contracts, precondition and postcondition; and replaces the program's list of predicates for
+	 * the arithmetic of its contracts with a new one, prefixed with {@code QF.} under
+	 * {@code removeQuantifiers} ({@code setPredsEncodingValueOfArithmeticOperationsInContracts}).
+	 *
+	 * <p>Assumes it runs inside {@link #visit(JDynAlloyModule)}; that the configuration's
+	 * {@code methodToCheck} has a {@code (} (a {@code StringIndexOutOfBoundsException} otherwise);
+	 * and, for the method under analysis, that the modifies table has an entry for the program (a
+	 * {@code NullPointerException} otherwise, as soon as a field has to be looked up there).
+	 *
+	 * @param node the program
+	 * @return a {@code ProgramTranslationResult}
+	 */
 	@Override
 	public Object visit(JProgramDeclaration node) {
 
@@ -1509,6 +1712,14 @@ final class JDynAlloyXlatorVisitor extends JDynAlloyVisitor {
 		return new Choice(ifProgram, elseProgram);
 	}
 
+	/**
+	 * Translates a call into a DynAlloy call of the program with the same id, with the call's
+	 * arguments, then every field ({@code JDynAlloyContext.fieldList()}), then {@code usedObjects}.
+	 * The call is not resolved here: its id is the one {@code VAlloyVisitor} gave it.
+	 *
+	 * @param n the call
+	 * @return an {@code InvokeProgram}
+	 */
 	@Override
 	public Object visit(JProgramCall n) {
 		String programId = n.getProgramId();
@@ -1550,6 +1761,19 @@ final class JDynAlloyXlatorVisitor extends JDynAlloyVisitor {
 		return node.getFormula();
 	}
 
+	/**
+	 * Translates a {@code havoc}, by the form of its expression: a field, as a whole relation
+	 * ({@code havocVariable3} for a relation to sequences, {@code havocVariable2} otherwise); any
+	 * other variable ({@code havocVariable}); an array access, the contents of the array at every
+	 * index ({@code havocArrayContents}, always on {@code java_lang_IntArray_contents}, whatever the
+	 * array's type, as the comment in the code warns for long arrays); a list read as a sequence
+	 * ({@code havocListSeq}); and {@code o.f}, the field of that object ({@code havocFieldContents}).
+	 *
+	 * @param n the {@code havoc}
+	 * @return the DynAlloy action call
+	 * @throws UnsupportedOperationException for a map or list access
+	 * @throws IllegalArgumentException for any other expression
+	 */
 	@Override
 	public Object visit(JHavoc n) {
 		AlloyExpression expresssion = n.getExpression();
@@ -1821,6 +2045,14 @@ final class JDynAlloyXlatorVisitor extends JDynAlloyVisitor {
 		}
 	}
 	
+	/**
+	 * Returns the {@code methodToCheck} given to the constructor, TACO's
+	 * {@code <package>_<Class>_<method>}: the id of the program that gets the fixed input
+	 * ({@code JDynAlloyVisitor.visit(JSpecCase)}; docs/NAMING.md, "Where the method under analysis
+	 * is looked up").
+	 *
+	 * @return the program id
+	 */
 	@Override
 	public String getFullyQualifiedMethodName(){
 		// TACO's methodToCheck already starts with the class: <package>_<Class>_<method>

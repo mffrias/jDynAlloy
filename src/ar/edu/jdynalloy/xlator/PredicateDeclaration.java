@@ -7,6 +7,17 @@ import ar.uba.dc.rfm.alloy.AlloyVariable;
 import ar.uba.dc.rfm.alloy.ast.formulas.AlloyFormula;
 import ar.uba.dc.rfm.alloy.ast.formulas.JFormulaPrinter;
 
+/**
+ * An Alloy predicate that {@link FormulaWrapper} declares when it wraps a formula: its id, its formal
+ * parameters in order, their types and its body. {@code JDynAlloyXlatorVisitor.visit(JDynAlloyModule)}
+ * prints every declaration of the module's wrapper ({@link #toString(boolean)}, pretty-printed) into
+ * the Alloy part of the DynAlloy module, so the predicates of the conditions, invariants and
+ * contracts, and the pre- and postcondition of the method under analysis, are declared in the module
+ * that wrapped them (docs/NAMING.md, "What it names").
+ *
+ * <p>Equality is by value: the id, the parameters, the typing and the body. The visitor collects the
+ * declarations in a {@code HashSet}, so they are printed in no particular order. No static state.
+ */
 class PredicateDeclaration {
 	private final String predicateId;
 
@@ -62,6 +73,15 @@ class PredicateDeclaration {
 				+ getTyping().hashCode() + getFormula().hashCode();
 	}
 
+	/**
+	 * Returns the Alloy text of the predicate, {@code pred <id>[<p>:<type>,...]{<body>}} and a line
+	 * break: each parameter with its type in {@code getTyping()} ({@code null} if it has none there),
+	 * and the body printed by dynalloy4's {@code JFormulaPrinter}.
+	 *
+	 * @param prettyPrint true to put each parameter on its own line, indented by two spaces, and to
+	 *        indent the body by three ({@link #increaseIndentation(String)})
+	 * @return the text
+	 */
 	public String toString(boolean prettyPrint) {
 		StringBuffer buff = new StringBuffer();
 		buff.append("pred " + this.getPredicateId());

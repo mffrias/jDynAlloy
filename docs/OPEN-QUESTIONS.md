@@ -119,3 +119,15 @@ Points where the code does not say what was intended, for the maintainer
     `java_util_Map_entries` and `java_util_List_seq`, so nothing appears to produce either name;
     the prelude's `updateList` is commented out (`factory/JPreludeFactory.java:409-433`). Are
     these checks still needed?
+25. **Two `methodToCheck`s** (`xlator/JDynAlloyXlatorVisitor.java:223-231`, `609-612`): the
+    visitor stores the `classToCheck` it is given but never reads it, and finds the method under
+    analysis through two separate settings: the constructor's `methodToCheck` for the fixed input
+    (`getFullyQualifiedMethodName`), and `JDynAlloyConfig`'s `getClassToCheck()` /
+    `getMethodToCheck()` for the assertion (local variables at 609-611 shadow the fields). Are
+    both meant to stay?
+26. **`hasObjectCreation` always true** (`JDynAlloyXlatorVisitor.java:567-575`, `679`,
+    `visit(JProgramDeclaration)`): `ObjectCreationDetector` computes it and the next step sets it
+    to `true`, so `usedObjects` is always constrained in the precondition. Should the detector
+    still decide this? (The commented-out code around it suggests it once did.)
+27. **`DynAlloyAction`** (`xlator/DynAlloyAction.java`): nothing uses it, and its static counter
+    `index` would grow across runs in one JVM. Can it go?
