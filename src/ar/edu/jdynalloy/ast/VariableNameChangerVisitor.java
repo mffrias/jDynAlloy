@@ -21,6 +21,17 @@ public class VariableNameChangerVisitor extends JDynAlloyMutator{
 	List<AlloyVariable> vars = null;
 
 
+	/**
+	 * Creates the visitor for one {@code do} loop. It returns a copy of the statement it visits
+	 * in which each variable of {@code vars} is renamed to {@code do_body_rename_<name>}: in the
+	 * declarations, and, through a {@link VariableNameChangerFormulaMutator}, in the formulas and
+	 * expressions of the statements. Being a {@link JDynAlloyMutator}, it does not rename the
+	 * variable of a {@code createObject}. {@link JAlloyProgramBuffer#closeDo()} creates one, with
+	 * the variables that the loop's body declares.
+	 *
+	 * @param vars the variables to rename
+	 * @param isJavaArithmetic true with Java arithmetic; passed to {@link JDynAlloyMutator}
+	 */
 	public VariableNameChangerVisitor(List<AlloyVariable> vars, boolean isJavaArithmetic) {
 		super(isJavaArithmetic);
 		this.vars = vars;

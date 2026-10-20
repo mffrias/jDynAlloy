@@ -1,5 +1,13 @@
 package ar.edu.jdynalloy.ast;
 
+/**
+ * The visitor of the JDynAlloy AST: one {@code visit} per node class, and each node's
+ * {@code accept(IJDynAlloyVisitor)} calls the one for its class and returns its result. The
+ * formulas and expressions inside the nodes are dynalloy4's ({@code AlloyFormula},
+ * {@code AlloyExpression}) and are visited with dynalloy4's visitors, not with this one. Its only
+ * implementation is {@link JDynAlloyVisitor}, which every visitor of jDynAlloy and TACO extends;
+ * see there for the traversal and the results. See docs/LANGUAGE.md for the nodes.
+ */
 public interface IJDynAlloyVisitor {
 
 	Object visit(JAssertionDeclaration assertion);

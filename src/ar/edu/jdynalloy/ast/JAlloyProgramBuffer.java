@@ -12,6 +12,27 @@ import ar.uba.dc.rfm.alloy.ast.expressions.ExprConstant;
 import ar.uba.dc.rfm.alloy.ast.expressions.ExprVariable;
 import ar.uba.dc.rfm.alloy.ast.formulas.AlloyFormula;
 
+/**
+ * Builds a JDynAlloy statement one statement at a time, for code that walks a structured
+ * program. Its users: TACO's statement translator ({@code JmlAstTransverseStatementVisitor} holds
+ * one, and {@code JDynAlloyASTVisitor} creates a {@code BlockStatementsVisitor}, so a buffer, for
+ * each method body), TACO's models of {@code Integer} and {@code Boolean}, and jDynAlloy's
+ * {@code ModularMutator}, for the specification programs.
+ *
+ * <p>It keeps a stack of open constructs. {@link #openIf}, {@link #openWhile} and
+ * {@link #openDo} push one; statements go to the block of the innermost one, or to the top level
+ * when none is open; {@link #switchToElseIf()} moves an {@code if} from its then branch to its
+ * else branch; {@link #closeIf()}, {@link #closeWhile()} and {@link #closeDo()} pop it and add
+ * the statement they build to the enclosing block. A list of statements becomes {@code skip} when
+ * it is empty, the statement itself when it has one, and a {@code JBlock} otherwise.
+ * {@link #toJAlloyProgram()} returns the top level once every construct is closed. Calls out of
+ * order throw an {@code IllegalStateException}.
+ *
+ * <p>The other methods add one statement to the current block: the {@code assign} overloads (an
+ * assignment {@code lvalue := rvalue}), {@code declare} (a variable declaration),
+ * {@code assertion}, {@code assumption}, {@code havoc}, {@code skip}, and {@code appendProgram}
+ * (any statement). One buffer per program; no static state.
+ */
 final public class JAlloyProgramBuffer {
 
 
@@ -21,6 +42,13 @@ final public class JAlloyProgramBuffer {
 		return isJavaArithmetic;
 	}
 
+	/**
+	 * Sets the flag passed to the visitors that {@link #closeDo()} creates, where it has no effect
+	 * (they have no input to fix; see {@link JDynAlloyVisitor}). TACO's
+	 * {@code JDynAlloyASTVisitor} sets it from {@code useJavaArithmetic}. The default is false.
+	 *
+	 * @param isJavaArithmetic true with Java arithmetic
+	 */
 	public void setJavaArithmetic(boolean isJavaArithmetic) {
 		this.isJavaArithmetic = isJavaArithmetic;
 	}
@@ -203,14 +231,36 @@ final public class JAlloyProgramBuffer {
 
 	private PartialAST ast = new PartialAST();
 
+	/**
+	 * Adds the assignment of a constant, {@code lvalue := constantId}, to the current block.
+	 *
+	 * @param lvalue the variable assigned
+	 * @param constantId the constant, as it is printed (an {@code ExprConstant} without module
+	 *        alias)
+	 */
 	public void assign(AlloyVariable lvalue, String constantId) {
 		addAssignment(lvalue, new ExprConstant(null, constantId));
 	}
 
+	/**
+	 * Adds the assignment of a constant, {@code lvalue := constantId}, to the current block.
+	 *
+	 * @param lvalue the location assigned (a variable, a field of an object, ...)
+	 * @param constantId the constant, as it is printed (an {@code ExprConstant} without module
+	 *        alias)
+	 */
 	public void assign(AlloyExpression lvalue, String constantId) {
 		addAssignment(lvalue, new ExprConstant(null, constantId));
 	}
 
+	/**
+	 * Closes the innermost construct, an {@code if}, and adds it to the enclosing block: its then
+	 * branch is what was added before {@link #switchToElseIf()}, and its else branch what was
+	 * added after, or {@code skip} if the branch was never switched. The branch id is the one
+	 * given to {@link #openIf(AlloyFormula, String)}.
+	 *
+	 * @throws IllegalStateException if the innermost construct is not an {@code if}
+	 */
 	public void closeIf() {
 		JIfThenElse i = null;
 
@@ -268,6 +318,13 @@ final public class JAlloyProgramBuffer {
 		ast.getCurrBlock().add(new JAssignment(lvalue, rvalue));
 	}
 
+	/**
+	 * Closes the innermost construct, a {@code while}, and adds it to the enclosing block, with
+	 * the condition, loop invariant and branch id given to
+	 * {@link #openWhile(AlloyFormula, JLoopInvariant, String)}.
+	 *
+	 * @throws IllegalStateException if the innermost construct is not a {@code while}
+	 */
 	public void closeWhile() {
 		if (ast.onWhileState()) {
 			JWhile w = buildWhile(ast.getCurrCondition(), ast.getWhileAnnotation(),
@@ -279,6 +336,21 @@ final public class JAlloyProgramBuffer {
 	}
 
 
+	/**
+	 * Closes the innermost construct, a {@code do} loop, and adds to the enclosing block the block
+	 * {@code { body; while condition' { body' } }}: the body as it was added, then a
+	 * {@code while} with the loop invariant and branch id given to
+	 * {@link #openDo(AlloyFormula, JLoopInvariant, String)}, whose body is a copy of the body and
+	 * whose condition a copy of the condition, in both of which the variables that the body
+	 * declares, at any depth ({@link #collectNewlyDefinedVars}), are renamed to
+	 * {@code do_body_rename_<name>} ({@link VariableNameChangerVisitor}), so that they are not
+	 * declared twice.
+	 *
+	 * @throws IllegalStateException if the innermost construct is not a {@code do}
+	 * @throws NullPointerException as {@link #collectNewlyDefinedVars} does, if a statement at the
+	 *         top of the body is not a variable declaration, a block, an {@code if} or a
+	 *         {@code while}
+	 */
 	public void closeDo() {
 		if (ast.onDoState()) {
 			JWhile w = buildWhile(ast.getCurrCondition(), ast.getDoAnnotation(),
@@ -319,6 +391,17 @@ final public class JAlloyProgramBuffer {
 		return new JWhile(newCond, newBody, w.getLoopInvariant(), w.getBranchId());
 	}
 
+	/**
+	 * Returns the variables that a list of statements declares, at any depth (inside blocks,
+	 * branches and loops), in order, with a {@link JDynAlloyVarDeclarationCollector}.
+	 *
+	 * @param currBlock the statements
+	 * @param isJavaArithmetic passed to the collector, where it has no effect
+	 * @return the declared {@code AlloyVariable}s
+	 * @throws NullPointerException if a statement of the list is not a variable declaration, a
+	 *         block, an {@code if} or a {@code while}: the collector returns null for it, and the
+	 *         result is flattened without a check
+	 */
 	public static List<Object> collectNewlyDefinedVars(List<JStatement> currBlock, boolean isJavaArithmetic){
 		Vector<Object> vars = new Vector<Object>();
 		JDynAlloyVarDeclarationCollector newDecsVisitor = new JDynAlloyVarDeclarationCollector(isJavaArithmetic);
@@ -382,6 +465,15 @@ final public class JAlloyProgramBuffer {
 			return new JBlock(b);
 	}
 
+	/**
+	 * Returns the statements added at the top level: {@code skip} if there are none, the
+	 * statement if there is one, and a {@code JBlock} otherwise. The buffer is not reset, and the
+	 * block shares its list with the buffer: statements added later appear in it too.
+	 *
+	 * @return the program's statement
+	 * @throws IllegalStateException if a construct is still open ("ProgramBuffer haven't return
+	 *         to initial state")
+	 */
 	public JStatement toJAlloyProgram() {
 		if (ast.onInitialState()) {
 			return buildStmt(ast.getCurrBlock());
@@ -390,14 +482,32 @@ final public class JAlloyProgramBuffer {
 					"ProgramBuffer haven't return to initial state");
 	}
 
+	/**
+	 * Opens an {@code if}: the statements added next go to its then branch, until
+	 * {@link #switchToElseIf()} or {@link #closeIf()}.
+	 *
+	 * @param condition the condition
+	 * @param branchId the id of the branch (printed as {@code lblpos}), or null for none
+	 */
 	public void openIf(AlloyFormula condition, String branchId) {
 		ast.newIfThenElseState(condition, branchId);
 	}
 
+	/**
+	 * Opens an {@code if} without a branch id; see {@link #openIf(AlloyFormula, String)}.
+	 *
+	 * @param condition the condition
+	 */
 	public void openIf(AlloyFormula condition) {
 		openIf(condition, null);
 	}
 
+	/**
+	 * Makes the statements added next go to the else branch of the innermost {@code if}.
+	 *
+	 * @throws IllegalStateException if the innermost construct is not an {@code if} in its then
+	 *         branch (once only per {@code if})
+	 */
 	public void switchToElseIf() {
 		if (ast.onIfThenState())
 			ast.switchToElseState();
@@ -409,19 +519,49 @@ final public class JAlloyProgramBuffer {
 		ast.getCurrBlock().add(new JSkip());
 	}
 
+	/**
+	 * Opens a {@code while} without a branch id; see
+	 * {@link #openWhile(AlloyFormula, JLoopInvariant, String)}.
+	 *
+	 * @param condition the condition
+	 * @param annotation the loop invariant, or null
+	 */
 	public void openWhile(AlloyFormula condition, JLoopInvariant annotation) {
 		openWhile(condition, annotation, null);
 	}
 
+	/**
+	 * Opens a {@code do} loop without a branch id; see
+	 * {@link #openDo(AlloyFormula, JLoopInvariant, String)}.
+	 *
+	 * @param condition the condition
+	 * @param annotation the loop invariant, or null
+	 */
 	public void openDo(AlloyFormula condition, JLoopInvariant annotation) {
 		openDo(condition, annotation, null);
 	}
 
+	/**
+	 * Opens a {@code while}: the statements added next are its body, until
+	 * {@link #closeWhile()}.
+	 *
+	 * @param condition the condition
+	 * @param annotation the loop invariant, or null
+	 * @param branchId the id of the branch (printed as {@code lblpos}), or null for none
+	 */
 	public void openWhile(AlloyFormula condition, JLoopInvariant annotation,
 			String branchId) {
 		ast.newWhileState(condition, annotation, branchId);
 	}
 
+	/**
+	 * Opens a {@code do} loop: the statements added next are its body, until {@link #closeDo()},
+	 * which makes the loop.
+	 *
+	 * @param condition the condition, checked after each pass through the body
+	 * @param annotation the loop invariant, or null
+	 * @param branchId the id of the branch, or null for none
+	 */
 	public void openDo(AlloyFormula condition, JLoopInvariant annotation,
 			String branchId) {
 		ast.newDoState(condition, annotation, branchId);

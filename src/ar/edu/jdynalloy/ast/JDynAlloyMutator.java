@@ -15,6 +15,35 @@ import ar.uba.dc.rfm.alloy.ast.expressions.AlloyExpression;
 import ar.uba.dc.rfm.alloy.ast.formulas.AlloyFormula;
 import ar.uba.dc.rfm.alloy.ast.formulas.JFormulaMutator;
 
+/**
+ * A {@link JDynAlloyVisitor} that rebuilds the tree: each visit returns a new node made from
+ * what its children's visits returned, and the nodes it visits are not changed. Formulas go
+ * through a dynalloy4 {@code JFormulaMutator}, and expressions through that mutator's
+ * expression mutator; by default they are rebuilt unchanged, and a subclass changes them by
+ * installing its own ({@link #setFormulaMutator}). Subclasses override the nodes they change
+ * and leave the rest to this class: the translator's {@code VAlloyVisitor},
+ * {@code JDynAlloyTransformationVisitor}, {@code ModularMutator}, {@code PruneVisitor} and
+ * {@code RecursionUnfolderVisitor} (docs/ARCHITECTURE.md, "The translation"),
+ * {@link VariableNameChangerVisitor}, and TACO's {@code NullDerefVisitor}.
+ *
+ * <p>What is kept as it is:
+ * <ul>
+ * <li>a signature is copied with the same parts, its facts included, which the formula mutator
+ *     does not see; a field is copied with the same variable and type;</li>
+ * <li>a variable declaration keeps its variable and type, and a {@code createObject} its
+ *     signature and variable: neither goes through the expression mutator;</li>
+ * <li>a call keeps its program id and its {@code super} flag (its arguments are mutated); a
+ *     program its signature, id, flags and the predicates and variables for the arithmetic of
+ *     its contracts; a module its id, the predicates and variables for the arithmetic of its
+ *     object invariants, and {@code pinnedForNonRelevancyAnalysisForStryker};</li>
+ * <li>an {@code if} or {@code while} keeps its branch id.</li>
+ * </ul>
+ * In an {@code if} and a {@code while}, the branches (the loop invariant and the body) are
+ * visited before the condition. The specification cases are those of
+ * {@code JDynAlloyVisitor.visit(JSpecCase)}, which drops the {@code requires} when
+ * {@code inputToFix} is set; no mutator sets it. An assignment without a right side prints
+ * "BUG" to standard output and then fails with a {@code NullPointerException}. No static state.
+ */
 public class JDynAlloyMutator extends JDynAlloyVisitor {
 
 	@Override
@@ -61,10 +90,23 @@ public class JDynAlloyMutator extends JDynAlloyVisitor {
 
 	private JFormulaMutator formMutator;
 
+	/**
+	 * Replaces the formula mutator that every later visit uses for formulas, and whose expression
+	 * mutator it uses for expressions. Its one caller is the constructor of
+	 * {@link VariableNameChangerVisitor}.
+	 *
+	 * @param fm the formula mutator
+	 */
 	public void setFormulaMutator(JFormulaMutator fm){
 		formMutator = fm;
 	}
 
+	/**
+	 * Creates a mutator whose formula mutator is a plain {@code JFormulaMutator}, which rebuilds
+	 * formulas and expressions unchanged.
+	 *
+	 * @param isJavaArithmetic true with Java arithmetic; passed to {@link JDynAlloyVisitor}
+	 */
 	public JDynAlloyMutator(boolean isJavaArithmetic) {
 		super(isJavaArithmetic);
 		this.formMutator = new JFormulaMutator();
@@ -128,6 +170,14 @@ public class JDynAlloyMutator extends JDynAlloyVisitor {
 		return new JVariableDeclaration(n.getVariable(), n.getType());
 	}
 
+	/**
+	 * Returns a new module built from the results of the visits of the module's parts. The
+	 * invariants, constraints, {@code represents} and programs go into new {@code HashSet}s: they
+	 * lose any order they had, and results that are {@code equals} become one.
+	 *
+	 * @param node the module
+	 * @return the new {@link JDynAlloyModule}
+	 */
 	@Override
 	public Object visit(JDynAlloyModule node) {
 		JDynAlloyModuleVisitResult v = (JDynAlloyModuleVisitResult) super

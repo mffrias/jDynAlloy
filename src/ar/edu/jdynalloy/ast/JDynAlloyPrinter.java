@@ -165,6 +165,16 @@ public final class JDynAlloyPrinter extends JDynAlloyVisitor {
 		return buff.toString();
 	}
 
+	/**
+	 * Returns {@code while <condition>}, a line break, the branch label ({@code lblpos <id>}) if
+	 * any, {@code loop_invariant <formula>} if any, the body, indented, and {@code ;}. A body
+	 * that is not a block is printed after an empty pair of braces ({@code {}} around an empty
+	 * line), not inside it. {@link JAlloyProgramBuffer} makes such loops: a body of one statement
+	 * is that statement, and an empty one is {@code skip}.
+	 *
+	 * @param s the loop
+	 * @return its text
+	 */
 	public Object visit(JWhile s) {
 		boolean isBodyABlock = s.getBody() instanceof JBlock;
 
@@ -230,6 +240,14 @@ public final class JDynAlloyPrinter extends JDynAlloyVisitor {
 		return buff.toString();
 	}
 
+	/**
+	 * Returns {@code var <name>:<type>}, followed by {@code ;} only while
+	 * {@link #visit(JProgramDeclaration)} is printing a body. A declaration printed on its own, or
+	 * as a parameter, has no {@code ;}.
+	 *
+	 * @param n the declaration
+	 * @return its text
+	 */
 	@Override
 	public Object visit(JVariableDeclaration n) {
 		StringBuffer buff = new StringBuffer();
@@ -240,6 +258,13 @@ public final class JDynAlloyPrinter extends JDynAlloyVisitor {
 		return buff.toString();
 	}
 
+	/**
+	 * Returns {@code call <program id>[<arguments>];}. A {@code super} call is printed the same
+	 * way: the {@code super} of the syntax (docs/LANGUAGE.md, "Statements") is not written.
+	 *
+	 * @param n the call
+	 * @return its text
+	 */
 	@Override
 	public Object visit(JProgramCall n) {
 		StringBuffer buffer = new StringBuffer();
@@ -251,6 +276,22 @@ public final class JDynAlloyPrinter extends JDynAlloyVisitor {
 		return "call " + n.getProgramId() + "[" + buffer.toString() + "]" + ";";
 	}
 
+	/**
+	 * Returns a program as JDynAlloy text: {@code [virtual ]program <signature>::<id>[}, the
+	 * parameters one per line, {@code ]}; then, if it has specification cases,
+	 * {@code Specification { SpecCase #0 { ... } ... }} with each case's {@code requires},
+	 * {@code ensures} and {@code modifies}; then {@code Implementation} and the body, indented. A
+	 * pure program is printed as any other. A body that is not a block is printed without braces,
+	 * which the grammar does not accept (TACO's translation wraps method bodies in a block).
+	 *
+	 * <p>It visits the parameters, the specification cases and the body itself, as
+	 * {@code JDynAlloyVisitor} does but without setting {@code specFromMethod}, and marks the visit
+	 * of the body, so that {@link #visit(JVariableDeclaration)} ends the declarations of the body
+	 * with {@code ;} and not the parameters.
+	 *
+	 * @param node the program
+	 * @return the program's text
+	 */
 	@Override
 	public Object visit(JProgramDeclaration node) {
 		// taken from super
@@ -317,6 +358,38 @@ public final class JDynAlloyPrinter extends JDynAlloyVisitor {
 		return buffer.toString();
 	}
 
+	/**
+	 * Returns a module as JDynAlloy text, the text of the {@code .djals} files:
+	 * {@code module <id>}, the signature ({@link #visit(JSignature)}), the class singleton and the
+	 * literal singleton if the module has them (as more signatures), the fields
+	 * ({@code field f:T {}}), the class
+	 * invariants, class constraints, object invariants and object constraints (the keyword, such
+	 * as {@code class_invariant}, on one line and the formula indented below), the
+	 * {@code represents} clauses and the programs ({@link #visit(JProgramDeclaration)}). A group
+	 * that is not empty is followed by an empty line, except that the class constraints get one
+	 * when the class invariants are not empty, and the object constraints when the object
+	 * invariants are not. Formulas are printed by dynalloy4's {@code JFormulaPrinter}, with
+	 * pretty printing. Each printer has its own state; none is static.
+	 *
+	 * <p>Who prints modules: TACO's {@code JavaToJDynAlloyManager.getModuleOutput}, which adds a
+	 * header comment and whose text {@code JDynAlloyPrinterStage}, {@code JDynAlloyStage}
+	 * ({@code .without.modifies.djals}) and {@code PrecompiledModules} write under TACO's
+	 * {@code output_dir}; here, {@code JDynAlloyTranslator.writeDynJAlloyOutput} (for
+	 * {@code modularReasoning.outputModularJDynalloy}) and {@code ModifiesSolverManager}, at debug
+	 * level of its log. Nothing reads the files back, and the text does not always parse with
+	 * jDynAlloy's grammar (docs/LANGUAGE.md, "The parser"). What the grammar does not accept,
+	 * besides the branch labels ({@code lblpos}), {@code one sig} and
+	 * {@code modifies {EVERYTHING}} that LANGUAGE.md names: a signature with more than one fact,
+	 * with interfaces (printed as facts {@code M in I}), with both {@code extends} and
+	 * {@code in}, with fields of its own, or with Alloy predicates and functions; the singletons;
+	 * an empty block ({@code {}}); a program body or a loop body that is not a block
+	 * ({@link #visit(JProgramDeclaration)}, {@link #visit(JWhile)}). And what the text has no place
+	 * for is lost: {@code super} on calls, pure programs, and the predicates and variables for the
+	 * arithmetic of invariants and contracts. Unclear: whether the text is meant to parse back.
+	 *
+	 * @param node the module
+	 * @return the module's text
+	 */
 	@Override
 	public Object visit(JDynAlloyModule node) {
 
@@ -393,6 +466,22 @@ public final class JDynAlloyPrinter extends JDynAlloyVisitor {
 		return sb.toString();
 	}
 
+	/**
+	 * Returns a signature as Alloy text:
+	 * {@code [abstract] [one] sig <id> [extends <parent>] [in <set>] {<fields>}}, the fields
+	 * being the signature's own ({@code getFields()}, usually none: a module's fields are
+	 * {@code JField}s); then, on the next line, a block with a fact {@code <id> in <interface>}
+	 * for each interface and the signature's facts, each printed by a new
+	 * {@code JFormulaPrinter} without pretty printing, sorted as strings, one per line; then the
+	 * signature's Alloy predicates and functions as they are, one per line.
+	 *
+	 * <p>Besides being part of a module's text, this is the Alloy declaration of the signature in
+	 * the DynAlloy output: {@code JDynAlloyXlatorVisitor.visit(JSignature)} prints with it the
+	 * signature, the class singleton and the literal singleton of each module it translates.
+	 *
+	 * @param node the signature
+	 * @return the signature's text
+	 */
 	@Override
 	public Object visit(JSignature node) {
 		signatureId = node.getSignatureId();

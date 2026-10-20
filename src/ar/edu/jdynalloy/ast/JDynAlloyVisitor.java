@@ -26,6 +26,50 @@ import ar.uba.dc.rfm.alloy.util.LiteralCollector;
 import ar.uba.dc.rfm.alloy.util.LiteralCollectorExpVisitor;
 import ar.uba.dc.rfm.alloy.util.QFtransformer;
 
+/**
+ * The base visitor of the JDynAlloy AST, which every visitor of jDynAlloy and TACO extends:
+ * {@link JDynAlloyMutator} (and through it the translator's {@code VAlloyVisitor},
+ * {@code JDynAlloyTransformationVisitor}, {@code ModularMutator}, {@code PruneVisitor},
+ * {@code RecursionUnfolderVisitor} and TACO's {@code NullDerefVisitor}),
+ * {@link JDynAlloyPrinter}, the translator's {@code JDynAlloyXlatorVisitor},
+ * {@code CallGraphVisitor}, {@code ModifiesTableBuilder} and others, the visitors of the
+ * bindings, the relevancy analysis and the frame conditions, and TACO's
+ * {@code JDynAlloyFunPredCollector} (docs/ARCHITECTURE.md says where each runs).
+ *
+ * <p>It walks the declarations and statements, but not the formulas and expressions in them,
+ * which subclasses visit with dynalloy4's visitors. Each visit returns what its children
+ * returned, and a subclass that overrides the leaves gets their results back from
+ * {@code super.visit}:
+ * <ul>
+ * <li>a module: a {@link JDynAlloyModuleVisitResult}, with its parts visited in this order:
+ *     signature, class singleton and literal singleton (if present), fields, class invariants,
+ *     class constraints, object invariants, object constraints, {@code represents}, programs.
+ *     Invariants, constraints, {@code represents} and programs are sets, visited in their
+ *     iteration order;</li>
+ * <li>a program: see {@link #visit(JProgramDeclaration)};</li>
+ * <li>a specification case: a {@code Vector} of three {@code Vector}s, the results of its
+ *     {@code requires}, {@code ensures} and {@code modifies}, except with an input to fix
+ *     ({@link #visit(JSpecCase)});</li>
+ * <li>a block: a {@code Vector} of the results of its statements, in order; an {@code if}: a
+ *     {@code Vector} of the results of the then and else branches; a {@code while}: a
+ *     {@code Vector} of the result of its loop invariant (null without one) and of its body.
+ *     Conditions are not visited;</li>
+ * <li>a field: a {@code Vector} of its variable and its type (not visited);</li>
+ * <li>every other node: null. {@code JAssertionDeclaration} and {@code JAlloyCondition} throw
+ *     an {@code IllegalArgumentException} ("class ... not supported").</li>
+ * </ul>
+ *
+ * <p>It also applies a fixed input ({@link #visit(JSpecCase)}; docs/ARCHITECTURE.md, "Fixed
+ * input"), through four public fields: {@code inputToFix}, null unless a subclass sets it (only
+ * {@code JDynAlloyXlatorVisitor} does, from {@code JDynAlloyTranslator}); {@code specFromMethod},
+ * the id of the program being visited, set by {@link #visit(JProgramDeclaration)};
+ * {@code formalParameterNames}, the parameters of that program, which the subclass must set
+ * ({@code JDynAlloyXlatorVisitor} does); and {@code isJavaArithmetic}, which this class reads
+ * only there.
+ *
+ * <p>No static state of its own; but applying a fixed input with Java arithmetic adds literal
+ * modules to the static {@code JavaPrimitive*Value} singletons (see {@link #visit(JSpecCase)}).
+ */
 public class JDynAlloyVisitor implements IJDynAlloyVisitor {
 
 	public Object inputToFix;
@@ -37,6 +81,14 @@ public class JDynAlloyVisitor implements IJDynAlloyVisitor {
 	public boolean isJavaArithmetic = false;
 
 
+	/**
+	 * What {@link JDynAlloyVisitor#visit(JDynAlloyModule)} returns: the result of each part of the
+	 * module, in public fields that subclasses read after {@code super.visit}. The results of the
+	 * parts that are collections (fields, invariants, constraints, {@code represents}, programs)
+	 * are {@code Vector}s with one result per element; the singleton results are null when the
+	 * module has no such singleton. The last two fields are not results: they are the module's own
+	 * predicates and variables for the arithmetic of its object invariants.
+	 */
 	protected static class JDynAlloyModuleVisitResult {
 
 		public Object signature_result;
@@ -66,6 +118,12 @@ public class JDynAlloyVisitor implements IJDynAlloyVisitor {
 	}
 
 
+	/**
+	 * Creates a visitor.
+	 *
+	 * @param isJavaArithmetic true with Java arithmetic (TACO's {@code useJavaArithmetic}); this
+	 *        class uses it only to write the literals of a fixed input
+	 */
 	public JDynAlloyVisitor(boolean isJavaArithmetic) {
 		this.isJavaArithmetic = isJavaArithmetic;	
 	}
@@ -132,6 +190,17 @@ public class JDynAlloyVisitor implements IJDynAlloyVisitor {
 				"class JAlloyCondition not supported");
 	}
 
+	/**
+	 * Sets {@code specFromMethod} to the program's id, and then visits the program's parameters,
+	 * its specification cases and its body, in that order. {@code specFromMethod} keeps the id
+	 * after the visit, until the next program.
+	 *
+	 * @param node the program
+	 * @return a {@code Vector} of five elements: a {@code Vector} of the parameters' results, a
+	 *         {@code Vector} of the specification cases' results, the body's result, and, not
+	 *         visited, the program's predicates and variables for the arithmetic of its
+	 *         {@code requires} and {@code ensures}
+	 */
 	public Object visit(JProgramDeclaration node) {
 
 		this.specFromMethod = node.getProgramId();
@@ -162,6 +231,15 @@ public class JDynAlloyVisitor implements IJDynAlloyVisitor {
 		return result;
 	}
 
+	/**
+	 * Visits the parts of a module, in the order the class comment gives. An exception thrown
+	 * while visiting a field is caught: the visitor prints the module's id and its number of
+	 * fields to standard output, leaves out that field and the ones after it, and goes on with
+	 * the class invariants.
+	 *
+	 * @param node the module
+	 * @return a {@link JDynAlloyModuleVisitResult}
+	 */
 	public Object visit(JDynAlloyModule node) {
 
 		JDynAlloyModuleVisitResult result = new JDynAlloyModuleVisitResult();
@@ -328,6 +406,53 @@ public class JDynAlloyVisitor implements IJDynAlloyVisitor {
 		return null;
 	}
 
+	/**
+	 * Visits the {@code requires}, then the {@code ensures} and the {@code modifies} of a
+	 * specification case. With an input to fix ({@code inputToFix} not null), no {@code requires}
+	 * is visited: instead, the program whose id ({@code specFromMethod}) equals
+	 * {@link #getFullyQualifiedMethodName()} gets, as its only {@code requires} result, a formula
+	 * that fixes the input, and every other program gets no {@code requires} at all
+	 * (docs/ARCHITECTURE.md, "Fixed input"). The formula is built again for each
+	 * specification case. For each parameter in {@code formalParameterNames} other than
+	 * {@code throw}, {@code return} and those whose name starts with {@code customvar}, it says:
+	 * <ul>
+	 * <li>for a parameter of type {@code Int} (with Java arithmetic,
+	 *     {@code JavaPrimitiveIntegerValue}, {@code JavaPrimitiveLongValue},
+	 *     {@code JavaPrimitiveFloatValue} or {@code JavaPrimitiveCharValue}), that it equals the
+	 *     literal of its value;</li>
+	 * <li>for a null value, that the parameter is {@code null};</li>
+	 * <li>for a value already met through an earlier parameter or a field (equal by
+	 *     {@code equals}), that the parameter equals the expression that reached it first;</li>
+	 * <li>otherwise, what the value is: a boxed primitive equals its literal; an object of a
+	 *     class with declared fields has each of them ({@code getDeclaredFields}: not the
+	 *     inherited ones, the static ones included; field {@code f} of class {@code p.C} is the
+	 *     relation {@code p_C_f}) equal to its value, read by reflection and described in the
+	 *     same way; an object of a class without declared fields, an array for example, is only
+	 *     not {@code null}.</li>
+	 * </ul>
+	 * Last, for each two distinct values met (parameters and values reached through fields), that
+	 * their expressions differ. Without Java arithmetic, {@code char} and {@code float} values,
+	 * and {@code byte}, {@code short} and {@code double} values in any case, have no literal: the
+	 * equality gets null as its right side.
+	 *
+	 * <p>Side effects: with Java arithmetic, each literal is created, if missing, in the static
+	 * {@code JavaPrimitive*Value} singleton, as a module pinned for Stryker
+	 * ({@code toJavaPrimitiveIntegerLiteral(value, true)} and the like), and stays there for later
+	 * runs in the same JVM. The fields read are made accessible; an
+	 * {@code IllegalAccessException} is printed and that field left out.
+	 *
+	 * <p>Assumes, with an input to fix, that {@code inputToFix} is a
+	 * {@code HashMap<String, Object>} from parameter names ({@code thiz} included) to values, with
+	 * an {@code Integer}, {@code Long}, {@code Float} or {@code Character} for each primitive
+	 * parameter (a {@code NullPointerException} or {@code ClassCastException} otherwise), that
+	 * {@link #visit(JProgramDeclaration)} has set {@code specFromMethod}, and that the subclass has
+	 * set {@code formalParameterNames} to the program's parameters.
+	 *
+	 * @param node the specification case
+	 * @return a {@code Vector} of three {@code Vector}s: the results of the {@code requires} (with
+	 *         an input to fix, the one formula that fixes it, null if there is no parameter to
+	 *         fix, or nothing), of the {@code ensures} and of the {@code modifies}
+	 */
 	@Override
 	public Object visit(JSpecCase node) {
 		Vector<Object> requiresResults = new Vector<Object>();
@@ -390,6 +515,14 @@ public class JDynAlloyVisitor implements IJDynAlloyVisitor {
 
 
 
+	/**
+	 * Returns the id of the program that a fixed input applies to ({@link #visit(JSpecCase)}).
+	 * This class returns null, which no program matches; {@code JDynAlloyXlatorVisitor}
+	 * overrides it to return its {@code methodToCheck}, TACO's {@code <package>_<Class>_<method>}
+	 * (docs/NAMING.md, "Where the method under analysis is looked up").
+	 *
+	 * @return the program id, or null
+	 */
 	public String getFullyQualifiedMethodName() {
 		// TODO Auto-generated method stub
 		return null;

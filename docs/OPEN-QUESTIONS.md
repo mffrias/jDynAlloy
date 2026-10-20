@@ -81,3 +81,19 @@ Points where the code does not say what was intended, for the maintainer
     (`modifies/ReplaceModifiesModuleVisitor.java:408-410`): a module with a class singleton gets
     it as its literal singleton. Was `setClassSingleton` meant? (No effect today: TACO's modules
     have no class singleton, `useClassSingletons` being false.)
+17. **Two-dimensional int arrays** (`ast/JavaPrimitiveIntValueArrayFactory.java:60-61`,
+    `array_access`): a `java_lang_IntArray2d+null` array is read through
+    `java_lang_IntArray_contents`, the relation of one-dimensional int arrays. TACO's
+    `java_lang_IntArray2d.djals` declares `java_lang_IntArray2d_contents` instead, and TACO's
+    `PrecompiledModules` never loads that file. Are two-dimensional arrays meant to work?
+18. **`JavaUtilSetFactory`** (`ast/JavaUtilSetFactory.java`): nothing in jDynAlloy or TACO calls
+    it, and the function it names, `javaUtilSetSize`, is defined neither in the prelude nor in
+    TACO's built-in modules (TACO uses `JExpressionFactory.javaUtilSetSizeReturnsAlloyInt` and
+    `javaUtilSetSizeReturnsJavaPrimitiveIntegerValue`). Can it go?
+19. **Does the `.djals` text parse back?** (`ast/JDynAlloyPrinter.java`, `visit(JDynAlloyModule)`):
+    nothing in TACO or jDynAlloy reads the printed modules back, and much of the output does not
+    parse with jDynAlloy's grammar (besides the three cases in LANGUAGE.md, "The parser": several
+    signature facts, interfaces printed as `in` facts, fields and Alloy predicates and functions
+    of the signature itself, the class and literal singletons, empty blocks, bodies that are not
+    blocks), while `super`, `pure` and the arithmetic predicates and variables are dropped. Is it
+    meant to be read back, or only for people?
